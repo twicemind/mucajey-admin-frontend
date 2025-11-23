@@ -1,0 +1,14 @@
+# Node 20 Alpine
+FROM node:20-alpine
+
+WORKDIR /app
+
+# Dependencies installieren
+COPY package*.json ./
+RUN npm install
+
+# Port exposieren
+EXPOSE 5173
+
+# Vite Dev Server starten
+CMD ["npm", "run", "dev", "--", "--host"]
