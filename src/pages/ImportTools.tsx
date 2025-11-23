@@ -8,15 +8,24 @@ export default function ImportTools() {
   const [selectedService, setSelectedService] = useState<'spotify' | 'apple'>('spotify');
   const [retryMode, setRetryMode] = useState(false);
 
+  type ImportStatus = {
+    running: boolean;
+    json_file?: string;
+    service?: string;
+    status_message?: string;
+    progress?: number;
+    total?: number;
+  };
+
   const { data: filesData } = useQuery({
     queryKey: ['files'],
     queryFn: () => filesApi.getAll().then(res => res.data),
   });
 
-  const { data: status, refetch: refetchStatus } = useQuery({
+  const { data: status, refetch: refetchStatus } = useQuery<ImportStatus>({
     queryKey: ['import-status'],
     queryFn: () => importApi.getStatus().then(res => res.data),
-    refetchInterval: status?.running ? 2000 : false, // Poll alle 2s wenn Import läuft
+    refetchInterval: (query) => (query.state.data?.running ? 2000 : false), // Poll alle 2s wenn Import läuft
   });
 
   const startImportMutation = useMutation({
@@ -60,15 +69,15 @@ export default function ImportTools() {
                 <p><strong>Datei:</strong> {status.json_file}</p>
                 <p><strong>Service:</strong> {status.service}</p>
                 <p><strong>Status:</strong> {status.status_message}</p>
-                {status.total > 0 && (
+                {status.total && status.total > 0 && (
                   <div className="mt-2">
                     <div className="w-full bg-blue-200 rounded-full h-2.5">
                       <div
                         className="bg-blue-600 h-2.5 rounded-full transition-all"
-                        style={{ width: `${(status.progress / status.total) * 100}%` }}
+                        style={{ width: `${((status.progress ?? 0) / status.total) * 100}%` }}
                       ></div>
                     </div>
-                    <p className="text-xs mt-1">{status.progress} / {status.total}</p>
+                    <p className="text-xs mt-1">{status.progress ?? 0} / {status.total}</p>
                   </div>
                 )}
               </div>
