@@ -1,11 +1,11 @@
 FROM node:20-alpine AS build
 
 WORKDIR /app
-ENV NODE_ENV=production
+ENV NODE_ENV=development
 
-# Install dependencies with lockfile fidelity
+# Install dependencies with lockfile fidelity (include dev deps for build)
 COPY package*.json ./
-RUN npm ci
+RUN npm ci --include=dev
 
 # Build production bundle
 COPY . .
