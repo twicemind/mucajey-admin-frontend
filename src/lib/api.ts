@@ -1,7 +1,28 @@
 import axios from 'axios';
 
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
-const MUCAJEY_API_URL = import.meta.env.VITE_MUCAJEY_API_URL || 'http://localhost:3000';
+const resolveBackendBaseUrl = (preferred: string | undefined) => {
+  if (preferred) {
+    return preferred;
+  }
+
+  if (typeof window !== 'undefined') {
+    return window.location.origin;
+  }
+
+  return 'http://localhost:8000';
+};
+
+const API_BASE_URL = resolveBackendBaseUrl(import.meta.env.VITE_API_URL);
+
+const resolveMucajeyApiUrl = (preferred: string | undefined) => {
+  if (preferred) {
+    return preferred;
+  }
+
+  return 'http://localhost:3000';
+};
+
+const MUCAJEY_API_URL = resolveMucajeyApiUrl(import.meta.env.VITE_MUCAJEY_API_URL);
 
 export const api = axios.create({
   baseURL: API_BASE_URL,
