@@ -1,7 +1,12 @@
 FROM node:20-alpine AS build
 
+ARG VITE_API_URL
+ARG VITE_MUCAJEY_API_URL
+
 WORKDIR /app
-ENV NODE_ENV=development
+ENV NODE_ENV=development \
+    VITE_API_URL=${VITE_API_URL} \
+    VITE_MUCAJEY_API_URL=${VITE_MUCAJEY_API_URL}
 
 # Install dependencies with lockfile fidelity (include dev deps for build)
 COPY package*.json ./

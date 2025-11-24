@@ -8,8 +8,13 @@ const resolveBackendBaseUrl = (preferred: string | undefined) => {
       try {
         const parsed = new URL(preferred);
 
-        if (parsed.hostname === window.location.hostname) {
-          // Stick to the current origin when the hostname matches to avoid mixed-content issues.
+        const sameHostname = parsed.hostname === window.location.hostname;
+        const preferredPort = parsed.port || (parsed.protocol === 'https:' ? '443' : '80');
+        const currentPort = window.location.port || (protocol === 'https:' ? '443' : '80');
+        const samePort = preferredPort === currentPort;
+
+        if (sameHostname && samePort) {
+          // Stick to the current origin when host (including port) matches to avoid mixed-content issues.
           return `${protocol}//${host}${parsed.pathname}${parsed.search}${parsed.hash}`;
         }
 

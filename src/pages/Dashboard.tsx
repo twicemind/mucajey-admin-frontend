@@ -19,6 +19,18 @@ export default function Dashboard() {
     return <div>Keine Daten verfügbar</div>;
   }
 
+  const streamingCoverage = stats.streaming_coverage ?? {
+    spotify_count: 0,
+    apple_count: 0,
+    both_count: 0,
+    neither_count: 0,
+    spotify_percentage: 0,
+    apple_percentage: 0,
+    both_percentage: 0,
+  };
+
+  const recentFailedSearches = stats.recent_failed_searches ?? [];
+
   return (
     <div className="px-4 sm:px-0">
       <h2 className="text-2xl font-bold text-gray-900 mb-6">Dashboard</h2>
@@ -83,7 +95,7 @@ export default function Dashboard() {
                 <dl>
                   <dt className="text-sm font-medium text-gray-500 truncate">Both Services</dt>
                   <dd className="text-2xl font-semibold text-gray-900">
-                    {stats.streaming_coverage.both_percentage.toFixed(1)}%
+                    {streamingCoverage.both_percentage.toFixed(1)}%
                   </dd>
                 </dl>
               </div>
@@ -100,13 +112,13 @@ export default function Dashboard() {
             <div className="flex items-center justify-between mb-2">
               <span className="text-sm font-medium text-gray-700">Spotify</span>
               <span className="text-sm text-gray-500">
-                {stats.streaming_coverage.spotify_count} Cards ({stats.streaming_coverage.spotify_percentage.toFixed(1)}%)
+                {streamingCoverage.spotify_count} Cards ({streamingCoverage.spotify_percentage.toFixed(1)}%)
               </span>
             </div>
             <div className="w-full bg-gray-200 rounded-full h-2.5">
               <div
                 className="bg-green-600 h-2.5 rounded-full"
-                style={{ width: `${stats.streaming_coverage.spotify_percentage}%` }}
+                style={{ width: `${streamingCoverage.spotify_percentage}%` }}
               ></div>
             </div>
           </div>
@@ -115,13 +127,13 @@ export default function Dashboard() {
             <div className="flex items-center justify-between mb-2">
               <span className="text-sm font-medium text-gray-700">Apple Music</span>
               <span className="text-sm text-gray-500">
-                {stats.streaming_coverage.apple_count} Cards ({stats.streaming_coverage.apple_percentage.toFixed(1)}%)
+                {streamingCoverage.apple_count} Cards ({streamingCoverage.apple_percentage.toFixed(1)}%)
               </span>
             </div>
             <div className="w-full bg-gray-200 rounded-full h-2.5">
               <div
                 className="bg-red-600 h-2.5 rounded-full"
-                style={{ width: `${stats.streaming_coverage.apple_percentage}%` }}
+                style={{ width: `${streamingCoverage.apple_percentage}%` }}
               ></div>
             </div>
           </div>
@@ -129,7 +141,7 @@ export default function Dashboard() {
       </div>
 
       {/* Recent Failed Searches */}
-      {stats.recent_failed_searches.length > 0 && (
+      {recentFailedSearches.length > 0 && (
         <div className="bg-white shadow rounded-lg p-6">
           <h3 className="text-lg font-medium text-gray-900 mb-4">Recent Failed Searches</h3>
           <div className="overflow-x-auto">
@@ -154,7 +166,7 @@ export default function Dashboard() {
                 </tr>
               </thead>
               <tbody className="bg-white divide-y divide-gray-200">
-                {stats.recent_failed_searches.slice(0, 5).map((fs) => (
+                {recentFailedSearches.slice(0, 5).map((fs) => (
                   <tr key={`${fs.json_file}-${fs.card_id}`}>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                       {fs.json_file}
