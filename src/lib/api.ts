@@ -8,7 +8,8 @@ const resolveBackendBaseUrl = (preferred: string | undefined) => {
 
         if (parsed.protocol === 'http:' && parsed.hostname === window.location.hostname) {
           // Avoid mixed-content by upgrading to https when the page itself is served via https.
-          return window.location.origin;
+          parsed.protocol = 'https:';
+          return parsed.toString();
         }
       } catch (error) {
         console.warn('Failed to parse preferred API URL, falling back to window origin.', error);
