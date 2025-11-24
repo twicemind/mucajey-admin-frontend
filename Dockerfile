@@ -17,8 +17,10 @@ FROM nginx:1.27-alpine
 WORKDIR /usr/share/nginx/html
 
 # Clean default site and copy hardened config
-RUN rm /etc/nginx/conf.d/default.conf
-COPY --chown=nginx:nginx nginx.conf /etc/nginx/conf.d/default.conf
+RUN rm /etc/nginx/conf.d/default.conf \
+    && mkdir -p /var/cache/nginx /var/run/nginx /var/log/nginx \
+    && chown -R nginx:nginx /var/cache/nginx /var/run/nginx /var/log/nginx
+COPY --chown=nginx:nginx nginx.conf /etc/nginx/nginx.conf
 
 # Copy built assets
 COPY --from=build /app/dist ./
