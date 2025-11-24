@@ -1,29 +1,34 @@
 import axios from 'axios';
 
 const resolveBackendBaseUrl = (preferred: string | undefined) => {
-  if (preferred) {
-    if (typeof window !== 'undefined' && window.location.protocol === 'https:') {
+  if (typeof window !== 'undefined') {
+    const { protocol, host, origin } = window.location;
+
+    if (preferred) {
       try {
         const parsed = new URL(preferred);
 
-        if (parsed.protocol === 'http:' && parsed.hostname === window.location.hostname) {
-          // Avoid mixed-content by upgrading to https when the page itself is served via https.
+        if (parsed.hostname === window.location.hostname) {
+          // Stick to the current origin when the hostname matches to avoid mixed-content issues.
+          return `${protocol}//${host}${parsed.pathname}${parsed.search}${parsed.hash}`;
+        }
+
+        if (protocol === 'https:' && parsed.protocol === 'http:') {
+          // Upgrade any other http URL to https when the page itself is served via https.
           parsed.protocol = 'https:';
           return parsed.toString();
         }
+
+        return parsed.toString();
       } catch (error) {
         console.warn('Failed to parse preferred API URL, falling back to window origin.', error);
       }
     }
 
-    return preferred;
+    return origin;
   }
 
-  if (typeof window !== 'undefined') {
-    return window.location.origin;
-  }
-
-  return 'http://localhost:8000';
+  return preferred ?? 'http://localhost:8000';
 };
 
 const API_BASE_URL = resolveBackendBaseUrl(import.meta.env.VITE_API_URL);
