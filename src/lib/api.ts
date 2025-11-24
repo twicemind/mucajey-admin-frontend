@@ -53,8 +53,25 @@ const resolveBackendBaseUrl = (preferred: string | undefined) => {
 
   return preferred ?? 'http://localhost:8000';
 };
+const enforceHttpsOnSameOrigin = (url: string | undefined) => {
+  if (!url || typeof window === 'undefined') {
+    return url;
+  }
+
+  try {
+    const parsed = new URL(url);
+    if (window.location.protocol === 'https:' && parsed.protocol === 'http:' && parsed.hostname === window.location.hostname) {
+      parsed.protocol = 'https:';
+      return parsed.toString();
+    }
+    return url;
+  } catch (error) {
+    console.warn('Failed to enforce https on URL, leaving as is.', error, url);
+    return url;
+  }
+};
 const runtimeApiUrl = typeof window !== 'undefined' ? normalizePreferredUrl(window.__APP_CONFIG__?.apiBaseUrl) : undefined;
-const API_BASE_URL = resolveBackendBaseUrl(runtimeApiUrl ?? normalizePreferredUrl(import.meta.env.VITE_API_URL));
+const API_BASE_URL = enforceHttpsOnSameOrigin(resolveBackendBaseUrl(runtimeApiUrl ?? normalizePreferredUrl(import.meta.env.VITE_API_URL)));
 
 const resolveMucajeyApiUrl = (preferred: string | undefined) => {
   if (preferred) {
@@ -64,7 +81,16 @@ const resolveMucajeyApiUrl = (preferred: string | undefined) => {
   return 'http://localhost:3000';
 };
 const runtimeMucajeyUrl = typeof window !== 'undefined' ? normalizePreferredUrl(window.__APP_CONFIG__?.mucajeyApiUrl) : undefined;
-const MUCAJEY_API_URL = resolveMucajeyApiUrl(runtimeMucajeyUrl ?? normalizePreferredUrl(import.meta.env.VITE_MUCAJEY_API_URL));
+const MUCAJEY_API_URL = enforceHttpsOnSameOrigin(resolveMucajeyApiUrl(runtimeMucajeyUrl ?? normalizePreferredUrl(import.meta.env.VITE_MUCAJEY_API_URL)));
+
+if (typeof window !== 'undefined') {
+  console.info('[mucajey-admin] API base URLs resolved', {
+    API_BASE_URL,
+    MUCAJEY_API_URL,
+    runtimeApiUrl,
+    runtimeMucajeyUrl,
+  });
+}
 
 export const api = axios.create({
   baseURL: API_BASE_URL,
