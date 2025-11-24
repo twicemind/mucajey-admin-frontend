@@ -2,6 +2,19 @@ import axios from 'axios';
 
 const resolveBackendBaseUrl = (preferred: string | undefined) => {
   if (preferred) {
+    if (typeof window !== 'undefined' && window.location.protocol === 'https:') {
+      try {
+        const parsed = new URL(preferred);
+
+        if (parsed.protocol === 'http:' && parsed.hostname === window.location.hostname) {
+          // Avoid mixed-content by upgrading to https when the page itself is served via https.
+          return `https://${parsed.host}`;
+        }
+      } catch (error) {
+        console.warn('Failed to parse preferred API URL, falling back to window origin.', error);
+      }
+    }
+
     return preferred;
   }
 
