@@ -1,5 +1,23 @@
 import axios from 'axios';
 
+declare global {
+  interface Window {
+    __APP_CONFIG__?: {
+      apiBaseUrl?: string;
+      mucajeyApiUrl?: string;
+    };
+  }
+}
+
+const normalizePreferredUrl = (preferred: string | undefined) => {
+  if (!preferred) {
+    return undefined;
+  }
+
+  const trimmed = preferred.trim();
+  return trimmed.length > 0 ? trimmed : undefined;
+};
+
 const resolveBackendBaseUrl = (preferred: string | undefined) => {
   if (typeof window !== 'undefined') {
     const { protocol, host, origin } = window.location;
@@ -35,8 +53,8 @@ const resolveBackendBaseUrl = (preferred: string | undefined) => {
 
   return preferred ?? 'http://localhost:8000';
 };
-
-const API_BASE_URL = resolveBackendBaseUrl(import.meta.env.VITE_API_URL);
+const runtimeApiUrl = typeof window !== 'undefined' ? normalizePreferredUrl(window.__APP_CONFIG__?.apiBaseUrl) : undefined;
+const API_BASE_URL = resolveBackendBaseUrl(runtimeApiUrl ?? normalizePreferredUrl(import.meta.env.VITE_API_URL));
 
 const resolveMucajeyApiUrl = (preferred: string | undefined) => {
   if (preferred) {
@@ -45,8 +63,8 @@ const resolveMucajeyApiUrl = (preferred: string | undefined) => {
 
   return 'http://localhost:3000';
 };
-
-const MUCAJEY_API_URL = resolveMucajeyApiUrl(import.meta.env.VITE_MUCAJEY_API_URL);
+const runtimeMucajeyUrl = typeof window !== 'undefined' ? normalizePreferredUrl(window.__APP_CONFIG__?.mucajeyApiUrl) : undefined;
+const MUCAJEY_API_URL = resolveMucajeyApiUrl(runtimeMucajeyUrl ?? normalizePreferredUrl(import.meta.env.VITE_MUCAJEY_API_URL));
 
 export const api = axios.create({
   baseURL: API_BASE_URL,
