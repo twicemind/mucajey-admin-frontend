@@ -14,7 +14,8 @@ RUN npm ci --include=dev
 
 # Build production bundle
 COPY . .
-RUN npm run build
+RUN rm -rf dist .next build \
+    && npm run build
 
 # Runtime: nginx serving the built SPA
 FROM nginx:1.27-alpine
