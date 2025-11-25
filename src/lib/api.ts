@@ -1,4 +1,4 @@
-import axios from 'axios';
+import axios, { type InternalAxiosRequestConfig } from 'axios';
 
 declare global {
   interface Window {
@@ -21,7 +21,6 @@ const normalizePreferredUrl = (preferred: string | undefined) => {
 const resolveBackendBaseUrl = (preferred: string | undefined) => {
   if (typeof window !== 'undefined') {
     const { protocol, host, origin } = window.location;
-    console.log('Using preferred API URL:', preferred);
 
     if (preferred) {
       try {
@@ -42,7 +41,6 @@ const resolveBackendBaseUrl = (preferred: string | undefined) => {
           parsed.protocol = 'https:';
           return parsed.toString();
         }
-        console.log('Using preferred API URL:', parsed.toString());
         return parsed.toString();
       } catch (error) {
         console.warn('Failed to parse preferred API URL, falling back to window origin.', error);
@@ -84,15 +82,6 @@ const resolveMucajeyApiUrl = (preferred: string | undefined) => {
 const runtimeMucajeyUrl = typeof window !== 'undefined' ? normalizePreferredUrl(window.__APP_CONFIG__?.mucajeyApiUrl) : undefined;
 const MUCAJEY_API_URL = enforceHttpsOnSameOrigin(resolveMucajeyApiUrl(runtimeMucajeyUrl ?? normalizePreferredUrl(import.meta.env.VITE_MUCAJEY_API_URL)));
 
-if (typeof window !== 'undefined') {
-  console.info('[mucajey-admin] API base URLs resolved', {
-    API_BASE_URL,
-    MUCAJEY_API_URL,
-    runtimeApiUrl,
-    runtimeMucajeyUrl,
-  });
-}
-
 export const api = axios.create({
   baseURL: API_BASE_URL,
   headers: {
@@ -108,6 +97,37 @@ export const mucajeyApi = axios.create({
     'X-API-Key': 'mucajey-dev-key-2024', // API-Key für Node.js Backend
   },
 });
+
+const enforceHttpsOnRequest = (config: InternalAxiosRequestConfig) => {
+  if (typeof window === 'undefined') {
+    return config;
+  }
+
+  const desiredBase = config.baseURL ?? API_BASE_URL;
+  const inputUrl = config.url ?? '';
+
+  if (!desiredBase) {
+    return config;
+  }
+
+  try {
+    const combined = new URL(inputUrl, desiredBase);
+
+    if (window.location.protocol === 'https:' && combined.protocol === 'http:' && combined.hostname === window.location.hostname) {
+      combined.protocol = 'https:';
+    }
+
+    config.baseURL = undefined;
+    config.url = combined.toString();
+  } catch (error) {
+    console.warn('[mucajey-admin] Failed to normalize request URL', { inputUrl, desiredBase, error });
+  }
+
+  return config;
+};
+
+api.interceptors.request.use(enforceHttpsOnRequest);
+mucajeyApi.interceptors.request.use(enforceHttpsOnRequest);
 
 // Types
 export interface Card {
