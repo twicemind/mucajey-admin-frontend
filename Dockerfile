@@ -30,6 +30,7 @@ COPY --chown=nginx:nginx nginx.conf /etc/nginx/nginx.conf
 
 # Copy built assets
 COPY --from=build --chown=nginx:nginx /app/dist ./
+COPY --from=build --chown=nginx:nginx /app/public/runtime-config.template.js ./runtime-config.template.js
 
 COPY docker-entrypoint.sh /docker-entrypoint.sh
 RUN chmod +x /docker-entrypoint.sh
