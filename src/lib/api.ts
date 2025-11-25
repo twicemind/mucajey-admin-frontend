@@ -103,24 +103,18 @@ const enforceHttpsOnRequest = (config: InternalAxiosRequestConfig) => {
     return config;
   }
 
-  const desiredBase = config.baseURL ?? API_BASE_URL;
   const inputUrl = config.url ?? '';
 
-  if (!desiredBase) {
+  if (!API_BASE_URL) {
     return config;
   }
 
   try {
-    const combined = new URL(inputUrl, desiredBase);
-
-    if (window.location.protocol === 'https:' && combined.protocol === 'http:' && combined.hostname === window.location.hostname) {
-      combined.protocol = 'https:';
-    }
-
+    const combined = new URL(inputUrl, API_BASE_URL);
     config.baseURL = undefined;
     config.url = combined.toString();
   } catch (error) {
-    console.warn('[mucajey-admin] Failed to normalize request URL', { inputUrl, desiredBase, error });
+    console.warn('[mucajey-admin] Failed to normalize request URL', { inputUrl, apiBase: API_BASE_URL, error });
   }
 
   return config;
@@ -128,6 +122,15 @@ const enforceHttpsOnRequest = (config: InternalAxiosRequestConfig) => {
 
 api.interceptors.request.use(enforceHttpsOnRequest);
 mucajeyApi.interceptors.request.use(enforceHttpsOnRequest);
+
+if (typeof window !== 'undefined') {
+  console.info('[mucajey-admin] API base URLs resolved', {
+    API_BASE_URL,
+    MUCAJEY_API_URL,
+    runtimeApiUrl,
+    runtimeMucajeyUrl,
+  });
+}
 
 // Types
 export interface Card {
