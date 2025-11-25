@@ -181,8 +181,11 @@ export const cardsApi = {
     has_spotify?: boolean;
     has_apple?: boolean;
     search?: string;
-  }) => api.get<Card[]>('/api/cards', { params }),
-  
+  }) => {
+    console.log('Using preferred API URL for get all:', api.getUri());
+    const response = api.get<Card[]>('/api/cards', { params })
+    return response
+  },
   getById: (cardId: string, jsonFile?: string) =>
     api.get<Card>(`/api/cards/${cardId}`, { params: { json_file: jsonFile } }),
   
