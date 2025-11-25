@@ -21,6 +21,7 @@ const normalizePreferredUrl = (preferred: string | undefined) => {
 const resolveBackendBaseUrl = (preferred: string | undefined) => {
   if (typeof window !== 'undefined') {
     const { protocol, host, origin } = window.location;
+    console.log('Using preferred API URL:', preferred);
 
     if (preferred) {
       try {
@@ -41,7 +42,7 @@ const resolveBackendBaseUrl = (preferred: string | undefined) => {
           parsed.protocol = 'https:';
           return parsed.toString();
         }
-
+        console.log('Using preferred API URL:', parsed.toString());
         return parsed.toString();
       } catch (error) {
         console.warn('Failed to parse preferred API URL, falling back to window origin.', error);
