@@ -1,6 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { useState } from 'react';
-import { filesApi } from '../lib/api';
+import { useMemo, useState } from 'react';
+import { editionsApi } from '../lib/api';
 
 interface SyncResult {
   message: string;
@@ -27,50 +27,83 @@ interface SyncResult {
   }>;
 }
 
-export default function Files() {
+  interface EditionForm {
+    edition: string;
+    edition_name: string;
+    identifier: string;
+    language_short: string;
+    language_long: string;
+  }
+
+const initialFormData: EditionForm = {
+  edition: '',
+  edition_name: '',
+  identifier: '',
+  language_short: 'de',
+  language_long: 'Deutsch',
+};
+
+export default function Editions() {
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showSyncModal, setShowSyncModal] = useState(false);
   const [syncResult, setSyncResult] = useState<SyncResult | null>(null);
-  const [selectedFile, setSelectedFile] = useState<string>('');
-  const [formData, setFormData] = useState({
-    edition: '',
-    identifier: '',
-    language_short: 'de',
-    language_long: 'Deutsch'
-  });
-  
+  const [selectedFile, setSelectedFile] = useState('');
+    const [formData, setFormData] = useState<EditionForm>(initialFormData);
+
   const queryClient = useQueryClient();
 
-  const { data: filesData, isLoading } = useQuery({
-    queryKey: ['files'],
-    queryFn: () => filesApi.getAll().then(res => res.data),
+  const { data: editions = [], isLoading } = useQuery({
+    queryKey: ['editions'],
+    queryFn: editionsApi.getAll,
   });
 
-  const createFileMutation = useMutation({
-    mutationFn: filesApi.create,
+  const editionCount = editions.length;
+  const totalCards = useMemo(
+    () => editions.reduce((acc, edition) => acc + (edition.cardCount || 0), 0),
+    [editions]
+  );
+  const languageCount = useMemo(() => {
+    const langs = new Set<string>();
+    editions.forEach((entry) => {
+      const value = entry.language_long || entry.language_short;
+      if (value) {
+        langs.add(value);
+      }
+    });
+    return langs.size;
+  }, [editions]);
+
+  const createEditionMutation = useMutation({
+    mutationFn: (payload: EditionForm) =>
+      editionsApi.create({
+        edition: payload.edition.trim(),
+        identifier: payload.identifier.trim(),
+        edition_name: payload.edition_name.trim() || undefined,
+        language_short: payload.language_short.trim() || undefined,
+        language_long: payload.language_long.trim() || undefined,
+      }),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['files'] });
       queryClient.invalidateQueries({ queryKey: ['editions'] });
       setShowCreateModal(false);
-      setFormData({ edition: '', identifier: '', language_short: 'de', language_long: 'Deutsch' });
+      setFormData({ ...initialFormData });
     },
   });
 
   const syncSpotifyMutation = useMutation({
-    mutationFn: (filename: string) => filesApi.syncSpotifyPlaylist(filename),
+    mutationFn: (filename: string) => editionsApi.syncSpotifyPlaylist(filename),
     onSuccess: (data) => {
       setSyncResult(data.data as SyncResult);
       queryClient.invalidateQueries({ queryKey: ['cards'] });
-      queryClient.invalidateQueries({ queryKey: ['files'] });
+      queryClient.invalidateQueries({ queryKey: ['editions'] });
     },
   });
 
   const syncItunesMutation = useMutation({
-    mutationFn: (filename: string) => filesApi.syncItunesMusic(filename),
+    mutationFn: (filename: string) => editionsApi.syncItunesMusic(filename),
     onSuccess: (data) => {
       setSyncResult(data.data as SyncResult);
       queryClient.invalidateQueries({ queryKey: ['cards'] });
-      queryClient.invalidateQueries({ queryKey: ['files'] });
+      queryClient.invalidateQueries({ queryKey: ['editions'] });
     },
   });
 
@@ -88,15 +121,19 @@ export default function Files() {
     syncItunesMutation.mutate(filename);
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    createFileMutation.mutate(formData);
+  const handleSubmit = (event: React.FormEvent) => {
+    event.preventDefault();
+    createEditionMutation.mutate(formData);
   };
+
+  const creationError =
+    createEditionMutation.error as (Error & { response?: { data?: { error?: string } } }) | undefined;
+  const createErrorMessage = creationError?.response?.data?.error || creationError?.message || '';
 
   if (isLoading) {
     return (
       <div className="flex items-center justify-center h-64">
-        <div className="text-gray-500">Lade Dateien...</div>
+        <div className="text-gray-500">Lade Editionen...</div>
       </div>
     );
   }
@@ -104,27 +141,26 @@ export default function Files() {
   return (
     <div className="px-4 sm:px-0">
       <div className="flex justify-between items-center mb-6">
-        <h2 className="text-2xl font-bold text-gray-900">Files Overview</h2>
+        <h2 className="text-2xl font-bold text-gray-900">Edition Overview</h2>
         <button
           onClick={() => setShowCreateModal(true)}
           className="bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2 px-4 rounded-lg shadow"
         >
-          + Neue Datei erstellen
+          + Neue Edition erstellen
         </button>
       </div>
 
-      {/* Summary */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-5 mb-8">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-5 mb-8">
         <div className="bg-white overflow-hidden shadow rounded-lg">
           <div className="p-5">
             <div className="flex items-center">
               <div className="flex-shrink-0">
-                <span className="text-3xl">📁</span>
+                <span className="text-3xl">📚</span>
               </div>
               <div className="ml-5 w-0 flex-1">
                 <dl>
-                  <dt className="text-sm font-medium text-gray-500 truncate">Total Files</dt>
-                  <dd className="text-2xl font-semibold text-gray-900">{filesData?.total_files}</dd>
+                  <dt className="text-sm font-medium text-gray-500 truncate">Edition Files</dt>
+                  <dd className="text-2xl font-semibold text-gray-900">{editionCount}</dd>
                 </dl>
               </div>
             </div>
@@ -139,8 +175,24 @@ export default function Files() {
               </div>
               <div className="ml-5 w-0 flex-1">
                 <dl>
-                  <dt className="text-sm font-medium text-gray-500 truncate">Total Cards</dt>
-                  <dd className="text-2xl font-semibold text-gray-900">{filesData?.total_cards}</dd>
+                  <dt className="text-sm font-medium text-gray-500 truncate">Cards count</dt>
+                  <dd className="text-2xl font-semibold text-gray-900">{totalCards}</dd>
+                </dl>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div className="bg-white overflow-hidden shadow rounded-lg">
+          <div className="p-5">
+            <div className="flex items-center">
+              <div className="flex-shrink-0">
+                <span className="text-3xl">🌐</span>
+              </div>
+              <div className="ml-5 w-0 flex-1">
+                <dl>
+                  <dt className="text-sm font-medium text-gray-500 truncate">Language</dt>
+                  <dd className="text-2xl font-semibold text-gray-900">{languageCount}</dd>
                 </dl>
               </div>
             </div>
@@ -148,80 +200,81 @@ export default function Files() {
         </div>
       </div>
 
-      {/* Files Table */}
       <div className="bg-white shadow rounded-lg overflow-hidden">
         <div className="overflow-x-auto">
           <table className="min-w-full divide-y divide-gray-200">
             <thead className="bg-gray-50">
               <tr>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Filename
+                  Edition
                 </th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Edition
+                  Identifier
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Sprache
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Datei
                 </th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Cards
                 </th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Size
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Failed Searches
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Spotify Sync
+                  Aktionen
                 </th>
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
-              {filesData?.files.map((file) => (
-                <tr key={file.filename} className="hover:bg-gray-50">
+              {editions.map((edition) => (
+                <tr key={edition.file} className="hover:bg-gray-50">
                   <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                    {file.filename}
+                    {edition.edition_name}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                    {file.edition || '-'}
+                    {edition.identifier || '—'}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                    {file.card_count || 0}
+                    {edition.language_long || edition.language_short || '—'}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                    {(file.size / 1024).toFixed(2)} KB
+                    {edition.file}
                   </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    {file.has_failed_searches ? (
-                      <span className="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-yellow-100 text-yellow-800">
-                        ⚠️ Ja
-                      </span>
-                    ) : (
-                      <span className="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-green-100 text-green-800">
-                        ✓ Nein
-                      </span>
-                    )}
+                  <td className="px-6 py-4 whitespace-nowrap text-sm font-semibold text-gray-900">
+                    {edition.cardCount}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm">
-                    {file.filename !== 'hitster-de-import.json' ? (
-                      <div className="flex space-x-2">
+                    {edition.file !== 'hitster-de-import.json' ? (
+                      <div className="flex flex-wrap gap-2">
                         <button
-                          onClick={() => handleSyncClick(file.filename)}
+                          onClick={() => handleSyncClick(edition.file)}
                           disabled={syncSpotifyMutation.isPending || syncItunesMutation.isPending}
                           className="text-green-600 hover:text-green-800 hover:underline inline-flex items-center disabled:opacity-50 disabled:cursor-not-allowed"
                           title="Spotify Playlist Sync"
                         >
                           <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                            <path
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              strokeWidth={2}
+                              d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
+                            />
                           </svg>
                           Spotify
                         </button>
                         <button
-                          onClick={() => handleItunesSyncClick(file.filename)}
+                          onClick={() => handleItunesSyncClick(edition.file)}
                           disabled={syncSpotifyMutation.isPending || syncItunesMutation.isPending}
                           className="text-blue-600 hover:text-blue-800 hover:underline inline-flex items-center disabled:opacity-50 disabled:cursor-not-allowed"
                           title="iTunes/Apple Music Sync"
                         >
                           <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zM9 10l12-3" />
+                            <path
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              strokeWidth={2}
+                              d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zM9 10l12-3"
+                            />
                           </svg>
                           iTunes
                         </button>
@@ -237,33 +290,39 @@ export default function Files() {
         </div>
       </div>
 
-      {/* Create File Modal */}
       {showCreateModal && (
         <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
           <div className="relative top-20 mx-auto p-5 border w-96 shadow-lg rounded-md bg-white">
             <div className="mt-3">
               <h3 className="text-lg font-medium leading-6 text-gray-900 mb-4">
-                Neue Datei erstellen
+                Neue Edition erstellen
               </h3>
               <form onSubmit={handleSubmit} className="space-y-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Edition Name
-                  </label>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Edition Slug</label>
                   <input
                     type="text"
                     required
                     className="w-full border border-gray-300 rounded-md px-3 py-2"
                     value={formData.edition}
                     onChange={(e) => setFormData({ ...formData, edition: e.target.value })}
+                    placeholder="z.B. hitster-de-test"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Edition Name</label>
+                  <input
+                    type="text"
+                    className="w-full border border-gray-300 rounded-md px-3 py-2"
+                    value={formData.edition_name}
+                    onChange={(e) => setFormData({ ...formData, edition_name: e.target.value })}
                     placeholder="z.B. Hitster Deutschland Test"
                   />
                 </div>
-                
+
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Identifier (8 Zeichen)
-                  </label>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Identifier (8 Zeichen)</label>
                   <input
                     type="text"
                     required
@@ -271,7 +330,9 @@ export default function Files() {
                     maxLength={8}
                     className="w-full border border-gray-300 rounded-md px-3 py-2"
                     value={formData.identifier}
-                    onChange={(e) => setFormData({ ...formData, identifier: e.target.value.toLowerCase() })}
+                    onChange={(e) =>
+                      setFormData({ ...formData, identifier: e.target.value.toLowerCase() })
+                    }
                     placeholder="z.B. aaaa0099"
                   />
                   <p className="text-xs text-gray-500 mt-1">Nur Kleinbuchstaben und Zahlen</p>
@@ -279,9 +340,7 @@ export default function Files() {
 
                 <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Sprache (kurz)
-                    </label>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Sprache (kurz)</label>
                     <input
                       type="text"
                       className="w-full border border-gray-300 rounded-md px-3 py-2"
@@ -289,11 +348,9 @@ export default function Files() {
                       onChange={(e) => setFormData({ ...formData, language_short: e.target.value })}
                     />
                   </div>
-                  
+
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Sprache (lang)
-                    </label>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Sprache (lang)</label>
                     <input
                       type="text"
                       className="w-full border border-gray-300 rounded-md px-3 py-2"
@@ -303,10 +360,8 @@ export default function Files() {
                   </div>
                 </div>
 
-                {createFileMutation.isError && (
-                  <div className="text-red-600 text-sm">
-                    Fehler: {(createFileMutation.error as Error & { response?: { data?: { detail?: string } } })?.response?.data?.detail || 'Unbekannter Fehler'}
-                  </div>
+                {createErrorMessage && (
+                  <div className="text-red-600 text-sm">Fehler: {createErrorMessage}</div>
                 )}
 
                 <div className="flex justify-end gap-3 mt-5">
@@ -319,10 +374,10 @@ export default function Files() {
                   </button>
                   <button
                     type="submit"
-                    disabled={createFileMutation.isPending}
+                    disabled={createEditionMutation.isPending}
                     className="px-4 py-2 text-sm font-medium text-white bg-green-600 rounded-md hover:bg-green-700 disabled:opacity-50"
                   >
-                    {createFileMutation.isPending ? 'Erstelle...' : 'Erstellen'}
+                    {createEditionMutation.isPending ? 'Erstelle...' : 'Erstellen'}
                   </button>
                 </div>
               </form>
@@ -331,7 +386,6 @@ export default function Files() {
         </div>
       )}
 
-      {/* Sync Modal (Spotify & iTunes) */}
       {showSyncModal && (
         <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
           <div className="relative top-20 mx-auto p-5 border w-4/5 max-w-4xl shadow-lg rounded-md bg-white">
@@ -369,7 +423,11 @@ export default function Files() {
                 <div className="bg-red-50 border border-red-200 rounded-md p-4">
                   <div className="flex">
                     <svg className="h-5 w-5 text-red-400" fill="currentColor" viewBox="0 0 20 20">
-                      <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
+                      <path
+                        fillRule="evenodd"
+                        d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z"
+                        clipRule="evenodd"
+                      />
                     </svg>
                     <div className="ml-3">
                       <h3 className="text-sm font-medium text-red-800">Fehler beim Synchronisieren</h3>
@@ -386,7 +444,11 @@ export default function Files() {
                   <div className="bg-green-50 border border-green-200 rounded-md p-4">
                     <div className="flex">
                       <svg className="h-5 w-5 text-green-400" fill="currentColor" viewBox="0 0 20 20">
-                        <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                        <path
+                          fillRule="evenodd"
+                          d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z"
+                          clipRule="evenodd"
+                        />
                       </svg>
                       <div className="ml-3">
                         <h3 className="text-sm font-medium text-green-800">Synchronisierung abgeschlossen</h3>
@@ -418,7 +480,12 @@ export default function Files() {
                         <div className="col-span-2">
                           <dt className="text-sm font-medium text-gray-500">Playlist URL</dt>
                           <dd className="mt-1 text-sm text-gray-900">
-                            <a href={syncResult.playlistUrl} target="_blank" rel="noopener noreferrer" className="text-green-600 hover:underline">
+                            <a
+                              href={syncResult.playlistUrl}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="text-green-600 hover:underline"
+                            >
                               {syncResult.playlistUrl}
                             </a>
                           </dd>
@@ -475,7 +542,7 @@ export default function Files() {
                                 <td className="px-3 py-2 text-xs text-gray-900">{update.title}</td>
                                 <td className="px-3 py-2 text-xs text-gray-500">{update.artist}</td>
                                 <td className="px-3 py-2 text-xs">
-                                  <a 
+                                  <a
                                     href={`https://open.spotify.com/track/${update.spotifyTrack}`}
                                     target="_blank"
                                     rel="noopener noreferrer"

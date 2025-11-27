@@ -5,6 +5,7 @@ declare global {
     __APP_CONFIG__?: {
       apiBaseUrl?: string;
       mucajeyApiUrl?: string;
+      mucajeyApiKey?: string;
     };
   }
 }
@@ -15,6 +16,15 @@ const normalizePreferredUrl = (preferred: string | undefined) => {
   }
 
   const trimmed = preferred.trim();
+  return trimmed.length > 0 ? trimmed : undefined;
+};
+
+const normalizePreferredValue = (value: string | undefined) => {
+  if (!value) {
+    return undefined;
+  }
+
+  const trimmed = value.trim();
   return trimmed.length > 0 ? trimmed : undefined;
 };
 
@@ -81,12 +91,15 @@ const resolveMucajeyApiUrl = (preferred: string | undefined) => {
 };
 const runtimeMucajeyUrl = typeof window !== 'undefined' ? normalizePreferredUrl(window.__APP_CONFIG__?.mucajeyApiUrl) : undefined;
 const MUCAJEY_API_URL = enforceHttpsOnSameOrigin(resolveMucajeyApiUrl(runtimeMucajeyUrl ?? normalizePreferredUrl(import.meta.env.VITE_MUCAJEY_API_URL)));
+const runtimeMucajeyApiKey = typeof window !== 'undefined' ? normalizePreferredValue(window.__APP_CONFIG__?.mucajeyApiKey) : undefined;
+const MUCAJEY_API_KEY = runtimeMucajeyApiKey ?? normalizePreferredValue(import.meta.env.VITE_MUCAJEY_API_KEY) ?? 'mucajey-dev-key-2024';
 
 export const api = axios.create({
   baseURL: API_BASE_URL,
   headers: {
     'Content-Type': 'application/json',
   },
+  withCredentials: true,
 });
 
 // Separate API-Instanz für mucajey Backend (Node.js auf Port 3000)
@@ -94,34 +107,43 @@ export const mucajeyApi = axios.create({
   baseURL: MUCAJEY_API_URL,
   headers: {
     'Content-Type': 'application/json',
-    'X-API-Key': 'mucajey-dev-key-2024', // API-Key für Node.js Backend
+    'X-API-Key': MUCAJEY_API_KEY, // API-Key für Node.js Backend
   },
+  withCredentials: true,
 });
 
-const enforceHttpsOnRequest = (config: InternalAxiosRequestConfig) => {
+// Session-bound API uses the admin server's origin so /auth routes stay on the same host.
+export const sessionApi = axios.create({
+  baseURL: '',
+  headers: {
+    'Content-Type': 'application/json',
+  },
+  withCredentials: true,
+});
+
+const createRequestNormalizer = (baseUrl: string | undefined) => (config: InternalAxiosRequestConfig) => {
   if (typeof window === 'undefined') {
     return config;
   }
 
   const inputUrl = config.url ?? '';
 
-  if (!API_BASE_URL) {
+  if (!baseUrl) {
     return config;
   }
 
   try {
-    const combined = new URL(inputUrl, API_BASE_URL);
+    const combined = new URL(inputUrl, baseUrl);
     config.baseURL = undefined;
     config.url = combined.toString();
   } catch (error) {
-    console.warn('[mucajey-admin] Failed to normalize request URL', { inputUrl, apiBase: API_BASE_URL, error });
+    console.warn('[mucajey-admin] Failed to normalize request URL', { inputUrl, apiBase: baseUrl, error });
   }
 
   return config;
 };
 
-api.interceptors.request.use(enforceHttpsOnRequest);
-mucajeyApi.interceptors.request.use(enforceHttpsOnRequest);
+api.interceptors.request.use(createRequestNormalizer(API_BASE_URL));
 
 if (typeof window !== 'undefined') {
   console.info('[mucajey-admin] API base URLs resolved', {
@@ -151,6 +173,42 @@ export interface Card {
   language_short?: string;
   language_long?: string;
   source_file?: string;
+  edition_file?: string;
+  edition_name?: string;
+  genre?: string;
+}
+
+export interface CardCreatePayload {
+  edition_file: string;
+  edition?: string;
+  id: string;
+  title: string;
+  artist: string;
+  year: string;
+  apple?: {
+    id?: string;
+    uri?: string;
+  } | null;
+  spotify?: {
+    id?: string;
+    uri?: string;
+    url?: string;
+  } | null;
+}
+
+export type CardUpdatePayload = Partial<{
+  title: string;
+  artist: string;
+  year: string;
+  apple: CardCreatePayload['apple'];
+  spotify: CardCreatePayload['spotify'];
+}>;
+
+export interface ItunesTrack {
+  id?: string;
+  uri?: string;
+  name?: string;
+  artist?: string;
 }
 
 export interface FailedSearch {
@@ -164,111 +222,118 @@ export interface FailedSearch {
   timestamp: string;
 }
 
-export interface FileInfo {
-  filename: string;
-  path: string;
-  size: number;
-  card_count?: number;
-  edition?: string;
-  has_failed_searches: boolean;
+export interface StatsSummary {
+  total_cards: number;
+  total_editions: number;
+  total_files: number;
+  cards_with_apple_id: number;
+  cards_with_apple_uri: number;
+  cards_with_spotify_id: number;
+  cards_with_spotify_uri: number;
+  cards_with_both_streaming: number;
+  cards_with_any_streaming: number;
+  cards_missing_streaming: number;
+  cards_without_identifier: number;
+  average_cards_per_edition: number;
+  language_distribution: Record<string, number>;
+  cards_by_year: Record<string, number>;
+  cards_by_genre: Record<string, number>;
+  cards_per_edition: Record<string, number>;
+}
+
+export interface EditionStatsEntry {
+  edition: string;
+  edition_name: string;
+  language_short: string;
+  language_long: string;
+  identifier: string;
+  file: string;
+  cardCount: number;
 }
 
 export interface DashboardStats {
-  total_cards: number;
-  total_editions: number;
-  total_failed_searches: number;
-  streaming_coverage: {
-    spotify_count: number;
-    apple_count: number;
-    both_count: number;
-    neither_count: number;
-    spotify_percentage: number;
-    apple_percentage: number;
-    both_percentage: number;
-  };
-  edition_stats: Array<{
-    edition: string;
-    card_count: number;
-    spotify_coverage: number;
-    apple_coverage: number;
-    failed_searches: number;
-  }>;
-  recent_failed_searches: FailedSearch[];
+  summary: StatsSummary;
+  editions: EditionStatsEntry[];
 }
 
+export interface EditionEntry {
+  edition: string;
+  edition_name: string;
+  language_short: string;
+  language_long: string;
+  identifier: string;
+  file: string;
+  cardCount: number;
+}
+
+type ResultMessage<T extends Record<string, unknown>> = {
+  docs: {
+    method: string;
+    path: string;
+    description?: string;
+  };
+  message: string;
+} & T;
+
+export type ItunesSearchResponse = ResultMessage<{ track?: ItunesTrack }>;
+
 // API Functions
+const encodeSegment = (value: string) => encodeURIComponent(value);
+
 export const cardsApi = {
-  getAll: (params?: {
-    json_file?: string;
-    year?: string;
-    has_spotify?: boolean;
-    has_apple?: boolean;
-    search?: string;
-  }) => {
-    console.log('Using preferred API URL for get all:', api.getUri());
-    const response = api.get<Card[]>('/api/cards', { params })
-    return response
-  },
-  getById: (cardId: string, jsonFile?: string) =>
-    api.get<Card>(`/api/cards/${cardId}`, { params: { json_file: jsonFile } }),
-  
-  update: (cardId: string, jsonFile: string, data: Partial<Card>) =>
-    mucajeyApi.put<Card>(`/api/files/${jsonFile}/cards/${cardId}`, data),
-  
-  delete: (cardId: string, jsonFile: string) =>
-    api.delete(`/api/cards/${cardId}`, { params: { json_file: jsonFile } }),
-  
-  create: (data: { filename: string; id: string; title: string; artist: string; year: string; apple?: { id: string; uri: string }; spotify?: { id: string; uri: string; url: string } }) =>
-    api.post('/api/cards/', data),
-  
+  getAll: () =>
+    mucajeyApi
+      .get<ResultMessage<{ cards: Card[] }>>('/card/all')
+      .then(res => res.data.cards ?? []),
+  create: (payload: CardCreatePayload) =>
+    mucajeyApi
+      .post<ResultMessage<{ card: Card }>>('/card', payload)
+      .then(res => res.data.card),
+  update: (edition: string, cardId: string, data: CardUpdatePayload) =>
+    mucajeyApi
+      .patch<ResultMessage<{ card: Card }>>(
+        `/card/${encodeSegment(edition)}/${encodeSegment(cardId)}`,
+        data
+      )
+      .then(res => res.data.card),
+  delete: (edition: string, cardId: string) =>
+    mucajeyApi.delete(`/card/${encodeSegment(edition)}/${encodeSegment(cardId)}`),
   // iTunes Search für einzelne Card
   searchItunes: (title: string, artist: string, country: string = 'de') =>
-    mucajeyApi.get('/api/search/itunes', { params: { title, artist, country } }),
+    mucajeyApi.get<ItunesSearchResponse>('/v1/search/itunes', { params: { title, artist, country } }),
 };
 
-export const filesApi = {
-  getAll: () => api.get<{ total_files: number; total_cards: number; files: FileInfo[] }>('/api/files'),
-  
-  getContent: (filename: string) => api.get(`/api/files/${filename}`),
-  
-  create: (data: { edition: string; identifier: string; language_short?: string; language_long?: string }) =>
-    api.post('/api/files/', data),
-  
-  // Spotify & iTunes Sync verwenden das mucajey Backend (Node.js Port 3000)
+export const editionsApi = {
+  getAll: () =>
+    mucajeyApi
+      .get<ResultMessage<{ editions: EditionEntry[] }>>('/edition/all')
+      .then(res => res.data.editions ?? []),
+
+  create: (data: {
+    edition: string;
+    identifier: string;
+    language_short?: string;
+    language_long?: string;
+    edition_name?: string;
+    edition_file?: string;
+  }) => mucajeyApi.post('/edition', data),
+
+  // Spotify & iTunes Sync über das mucajey Backend (Node.js Port 3000)
   syncSpotifyPlaylist: (filename: string) =>
     mucajeyApi.post(`/api/files/${filename}/spotify-sync`),
-  
+
   syncItunesMusic: (filename: string, country: string = 'de') =>
     mucajeyApi.post(`/api/files/${filename}/itunes-sync`, { country }),
 };
 
-export const failedSearchesApi = {
-  getAll: (jsonFile?: string) =>
-    api.get<FailedSearch[]>('/api/failed-searches', { params: { json_file: jsonFile } }),
-  
-  delete: (jsonFile: string, cardId: string) =>
-    api.delete(`/api/failed-searches/${jsonFile}/${cardId}`),
-  
-  deleteAll: (jsonFile: string) =>
-    api.delete(`/api/failed-searches/${jsonFile}`),
-  
-  retry: (jsonFile: string, service: string) =>
-    api.post('/api/failed-searches/retry', { json_file: jsonFile, service }),
-};
-
-export const importApi = {
-  start: (jsonFile: string, service: string, retryMode: boolean = false) =>
-    api.post('/api/import/start', { json_file: jsonFile, service, retry_mode: retryMode }),
-  
-  getStatus: () => api.get('/api/import/status'),
-  
-  cancel: () => api.post('/api/import/cancel'),
-};
-
 export const statsApi = {
-  getDashboard: () => api.get<DashboardStats>('/api/stats/dashboard'),
-  
-  getCoverage: () => api.get('/api/stats/coverage'),
-  
-  getEditions: () => api.get<{ editions: Array<{ name: string; file: string; card_count: number }> }>('/api/stats/editions'),
+  getDashboard: () => mucajeyApi.get<DashboardStats>('/stats'),
+};
+
+export const authApi = {
+  changePassword: (payload: { currentPassword?: string; newPassword: string }) =>
+    sessionApi.post('/auth/users/password', payload),
+  resetPassword: (username: string, password: string) =>
+    sessionApi.post(`/auth/users/${encodeSegment(username)}/password`, { password }),
+  deleteUser: (username: string) => sessionApi.delete(`/auth/users/${encodeSegment(username)}`),
 };

@@ -1,0 +1,10 @@
+{
+  "users": [
+    {
+      "username": "admin",
+      "password": "$2b$10$u34I5lB2f1PxqwcvAfBeM.Ru83.FCh/JJuNnlGfLQ4Y0TBVY5s0Tm",
+      "type": "admin",
+      "apiKey": ""
+    }
+  ]
+}

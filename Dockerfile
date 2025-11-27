@@ -17,30 +17,22 @@ COPY . .
 RUN rm -rf dist .next build \
     && npm run build
 
-# Runtime: nginx serving the built SPA
-FROM nginx:1.27-alpine
+FROM node:20-alpine AS runtime
 
-WORKDIR /usr/share/nginx/html
+ARG VITE_API_URL
+ARG VITE_MUCAJEY_API_URL
 
-# Clean default site and copy hardened config
-RUN rm /etc/nginx/conf.d/default.conf \
-    && mkdir -p /var/cache/nginx /var/run/nginx /var/log/nginx \
-    && chown -R nginx:nginx /var/cache/nginx /var/run/nginx /var/log/nginx \
-    && apk add --no-cache gettext
-COPY --chown=nginx:nginx nginx.conf /etc/nginx/nginx.conf
+WORKDIR /app
+ENV NODE_ENV=production \
+    VITE_API_URL=${VITE_API_URL} \
+    VITE_MUCAJEY_API_URL=${VITE_MUCAJEY_API_URL}
 
-# Copy built assets
-COPY --from=build --chown=nginx:nginx /app/dist ./
-COPY --from=build --chown=nginx:nginx /app/public/runtime-config.template.js ./runtime-config.template.js
-
+COPY --from=build /app .
 COPY docker-entrypoint.sh /docker-entrypoint.sh
-RUN chmod +x /docker-entrypoint.sh
+RUN chmod +x /docker-entrypoint.sh && \
+    apk add --no-cache gettext
 
-EXPOSE 8080
-
-HEALTHCHECK --interval=30s --timeout=5s --retries=3 CMD wget -q --spider http://127.0.0.1:8080/ || exit 1
+EXPOSE 4173
 
 ENTRYPOINT ["/docker-entrypoint.sh"]
-USER nginx
-
-CMD ["nginx", "-g", "daemon off;"]
+CMD ["npm", "start"]

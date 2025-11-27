@@ -1,7 +1,12 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useParams, useNavigate } from 'react-router-dom';
-import { useState } from 'react';
-import { cardsApi } from '../lib/api';
+import { useEffect, useMemo, useState } from 'react';
+import {
+  cardsApi,
+  type Card,
+  type CardUpdatePayload,
+  type ItunesTrack
+} from '../lib/api';
 
 export default function CardDetail() {
   const { filename, id } = useParams<{ filename: string; id: string }>();
@@ -20,15 +25,25 @@ export default function CardDetail() {
     apple_uri: ''
   });
 
-  const { data: cards, isLoading, error } = useQuery({
-    queryKey: ['cards', { json_file: filename }],
-    queryFn: () => cardsApi.getAll({ json_file: filename || '' }).then(res => res.data),
+  const { data: cards = [], isLoading, error } = useQuery<Card[]>({
+    queryKey: ['cards'],
+    queryFn: cardsApi.getAll,
     enabled: !!filename,
   });
 
+  const card = useMemo(
+    () =>
+      cards.find(
+        (c) =>
+          c.id === id &&
+          (c.source_file ?? c.edition_file ?? '') === (filename ?? '')
+      ),
+    [cards, filename, id]
+  );
+
   const updateCardMutation = useMutation({
-    mutationFn: ({ cardId, jsonFile, data }: { cardId: string; jsonFile: string; data: any }) =>
-      cardsApi.update(cardId, jsonFile, data),
+    mutationFn: ({ cardId, jsonFile, data }: { cardId: string; jsonFile: string; data: CardUpdatePayload }) =>
+      cardsApi.update(jsonFile, cardId, data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['cards'] });
       setIsEditing(false);
@@ -41,15 +56,19 @@ export default function CardDetail() {
       return cardsApi.searchItunes(card.title, card.artist, 'de');
     },
     onSuccess: (response) => {
-      if (response.data.success && response.data.track) {
-        setFormData(prev => ({
+      const track: ItunesTrack | undefined = response.data.track;
+      if (track?.id && track?.uri) {
+        setFormData((prev) => ({
           ...prev,
-          apple_id: response.data.track.id,
-          apple_uri: response.data.track.uri
+          apple_id: track.id ?? '',
+          apple_uri: track.uri ?? ''
         }));
-        setItunesSearchResult(`✓ Gefunden: ${response.data.track.name} - ${response.data.track.artist}`);
+        setItunesSearchResult(`✓ Gefunden: ${track.name ?? ''} - ${track.artist ?? ''}`);
         setTimeout(() => setItunesSearchResult(null), 5000);
+        return;
       }
+      setItunesSearchResult(`✗ ${response.data.message || 'Kein Match gefunden'}`);
+      setTimeout(() => setItunesSearchResult(null), 5000);
     },
     onError: (error: any) => {
       setItunesSearchResult(`✗ ${error?.response?.data?.message || 'Kein Match gefunden'}`);
@@ -57,10 +76,11 @@ export default function CardDetail() {
     },
   });
 
-  const card = cards?.find(c => c.id === id);
+  useEffect(() => {
+    if (!card || isEditing || formData.title) {
+      return;
+    }
 
-  // Initialisiere Formular-Daten wenn Card geladen ist
-  if (card && !isEditing && formData.title === '') {
     setFormData({
       title: card.title,
       artist: card.artist,
@@ -71,13 +91,13 @@ export default function CardDetail() {
       apple_id: card.apple?.id || '',
       apple_uri: card.apple?.uri || ''
     });
-  }
+  }, [card, isEditing, formData.title]);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!filename || !id) return;
 
-    const updateData: any = {
+    const updateData: CardUpdatePayload = {
       title: formData.title,
       artist: formData.artist,
       year: formData.year
@@ -100,11 +120,11 @@ export default function CardDetail() {
       };
     }
 
-    updateCardMutation.mutate({
-      cardId: id,
-      jsonFile: filename,
-      data: updateData
-    });
+      updateCardMutation.mutate({
+        cardId: id,
+        jsonFile: filename,
+        data: updateData
+      });
   };
 
   if (isLoading) {
