@@ -39,10 +39,26 @@ const hasApple = (card: Card) => {
   return Boolean(apple?.id || apple?.uri);
 };
 
+const delay = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
+
+type EditionMappingStatus = {
+  running: boolean;
+  total: number;
+  processed: number;
+  currentCardId?: string;
+  error?: string;
+};
+
 export default function Cards() {
   const [filters, setFilters] = useState(() => ({ ...INITIAL_FILTERS }));
   const [formData, setFormData] = useState(() => ({ ...INITIAL_FORM }));
   const [showCreateModal, setShowCreateModal] = useState(false);
+  const [mappingCardId, setMappingCardId] = useState<string | null>(null);
+  const [editionMappingStatus, setEditionMappingStatus] = useState<EditionMappingStatus>({
+    running: false,
+    total: 0,
+    processed: 0
+  });
 
   const queryClient = useQueryClient();
 
@@ -104,6 +120,12 @@ export default function Cards() {
     });
   }, [cards, filters]);
 
+  const editionIdentifier = filters.json_file;
+  const editionCards = editionIdentifier
+    ? cards.filter((card) => (card.source_file ?? card.edition_file ?? '') === editionIdentifier)
+    : [];
+  const editionCardsMissingApple = editionCards.filter((card) => !hasApple(card));
+
   const createCardMutation = useMutation({
     mutationFn: cardsApi.create,
     onSuccess: () => {
@@ -113,6 +135,104 @@ export default function Cards() {
       setFormData({ ...INITIAL_FORM });
     }
   });
+
+  const mapCardMutation = useMutation({
+    mutationFn: ({ edition, cardId }: { edition: string; cardId: string }) =>
+      cardsApi.mapApple(edition, cardId),
+    onMutate: ({ cardId }) => setMappingCardId(cardId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['cards'] });
+      queryClient.invalidateQueries({ queryKey: ['dashboard-stats'] });
+    },
+    onSettled: () => setMappingCardId(null)
+  });
+
+  const handleMapSingleCard = (card: Card) => {
+    const edition = card.edition ?? card.edition_file ?? card.source_file ?? '';
+
+    if (!edition) {
+      alert('Edition identifier fehlt für diese Card.');
+      return;
+    }
+
+    mapCardMutation.mutate({ edition, cardId: card.id });
+  };
+
+  const handleMapEdition = async () => {
+    if (!editionIdentifier) {
+      return;
+    }
+
+    const cardsToProcess = [...editionCardsMissingApple];
+
+    if (cardsToProcess.length === 0) {
+      setEditionMappingStatus({
+        running: false,
+        total: 0,
+        processed: 0,
+        error: 'Alle Karten dieser Edition enthalten bereits Apple-Daten.',
+        currentCardId: undefined
+      });
+      return;
+    }
+
+    setEditionMappingStatus({
+      running: true,
+      total: cardsToProcess.length,
+      processed: 0,
+      currentCardId: undefined,
+      error: undefined
+    });
+
+    for (const [index, card] of cardsToProcess.entries()) {
+      const edition = card.edition ?? card.edition_file ?? card.source_file ?? editionIdentifier;
+
+      setEditionMappingStatus((prev) => ({
+        ...prev,
+        currentCardId: card.id,
+        error: undefined
+      }));
+
+      if (edition) {
+        try {
+          await cardsApi.mapApple(edition, card.id);
+          queryClient.invalidateQueries({ queryKey: ['cards'] });
+          queryClient.invalidateQueries({ queryKey: ['dashboard-stats'] });
+        } catch (error) {
+          const err = error as {
+            response?: { data?: { error?: string; message?: string } };
+            message?: string;
+          };
+          const message =
+            err?.response?.data?.error ?? err?.response?.data?.message ?? err?.message ?? 'Unbekannter Fehler';
+          setEditionMappingStatus((prev) => ({
+            ...prev,
+            error: `Fehler bei ${card.id}: ${message}`
+          }));
+        }
+      } else {
+        setEditionMappingStatus((prev) => ({
+          ...prev,
+          error: `Edition fehlt für Card ${card.id}.`
+        }));
+      }
+
+      setEditionMappingStatus((prev) => ({
+        ...prev,
+        processed: prev.processed + 1
+      }));
+
+      if (index < cardsToProcess.length - 1) {
+        await delay(5000);
+      }
+    }
+
+    setEditionMappingStatus((prev) => ({
+      ...prev,
+      running: false,
+      currentCardId: undefined
+    }));
+  };
 
   const selectedEdition = statsData?.editions.find((edition) => edition.file === filters.json_file);
   const mutationError = createCardMutation.error as { response?: { data?: { detail?: string } } } | null;
@@ -173,6 +293,20 @@ export default function Cards() {
         ) : (
           <span className="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-gray-100 text-gray-800">–</span>
         )}
+      </td>
+      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+        <button
+          type="button"
+          onClick={() => handleMapSingleCard(card)}
+          disabled={hasApple(card) || mapCardMutation.isPending || editionMappingStatus.running}
+          className="px-2 py-1 rounded-md border border-gray-300 text-xs font-semibold transition-colors hover:border-gray-500 disabled:border-gray-200 disabled:text-gray-500 disabled:cursor-not-allowed"
+        >
+          {hasApple(card)
+            ? 'Apple vorhanden'
+            : mappingCardId === card.id && mapCardMutation.isPending
+              ? 'Mapping…'
+              : 'Apple zuweisen'}
+        </button>
       </td>
       <td className="px-6 py-4 whitespace-nowrap text-sm">
         <Link to={`/cards/${card.source_file ?? card.edition_file}/${card.id}`} className="text-blue-600 hover:text-blue-800 hover:underline">
@@ -255,6 +389,34 @@ export default function Cards() {
         </div>
       </div>
 
+      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3 mb-6">
+        <button
+          type="button"
+          onClick={handleMapEdition}
+          disabled={!filters.json_file || editionCardsMissingApple.length === 0 || editionMappingStatus.running}
+          className="px-4 py-2 bg-gradient-to-r from-yellow-500 to-orange-500 text-white rounded-lg font-semibold shadow disabled:opacity-60 disabled:cursor-not-allowed"
+        >
+          {editionMappingStatus.running ? 'Edition-Mapping läuft…' : 'Apple Mapping für komplette Edition'}
+        </button>
+        <div className="text-sm text-gray-600">
+          {editionMappingStatus.running ? (
+            <span>
+              {editionMappingStatus.processed}/{editionMappingStatus.total} Karten verarbeitet
+              {editionMappingStatus.currentCardId ? ` · Karte ${editionMappingStatus.currentCardId}` : ''}
+            </span>
+          ) : filters.json_file ? (
+            <span>
+              {editionCardsMissingApple.length} Karten ohne Apple-Daten in der Edition
+            </span>
+          ) : (
+            <span>Edition wählen, um das Mapping für alle Karten zu starten.</span>
+          )}
+        </div>
+      </div>
+      {editionMappingStatus.error && (
+        <div className="mb-6 text-sm text-red-600">{editionMappingStatus.error}</div>
+      )}
+
       {cardsLoading ? (
         <div className="flex items-center justify-center h-64">
           <div className="text-gray-500">Lade Cards...</div>
@@ -277,6 +439,7 @@ export default function Cards() {
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">File</th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Spotify</th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Apple Music</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Apple Mapping</th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Aktionen</th>
                   </tr>
                 </thead>

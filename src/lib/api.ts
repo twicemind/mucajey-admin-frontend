@@ -298,6 +298,12 @@ export const cardsApi = {
       .then(res => res.data.card),
   delete: (edition: string, cardId: string) =>
     mucajeyApi.delete(`/card/${encodeSegment(edition)}/${encodeSegment(cardId)}`),
+  mapApple: (edition: string, cardId: string) =>
+    mucajeyApi
+      .post<ResultMessage<{ card: Card; apple?: Card['apple'] }>>(
+        `/card/${encodeSegment(edition)}/${encodeSegment(cardId)}/apple/search`
+      )
+      .then((res) => res.data.card),
   // iTunes Search für einzelne Card
   searchItunes: (title: string, artist: string, country: string = 'de') =>
     mucajeyApi.get<ItunesSearchResponse>('/v1/search/itunes', { params: { title, artist, country } }),
