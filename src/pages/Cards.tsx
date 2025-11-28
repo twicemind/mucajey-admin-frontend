@@ -223,7 +223,7 @@ export default function Cards() {
       }));
 
       if (index < cardsToProcess.length - 1) {
-        await delay(5000);
+        await delay(500);
       }
     }
 
