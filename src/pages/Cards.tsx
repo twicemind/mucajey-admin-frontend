@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
 import {
@@ -59,6 +59,7 @@ export default function Cards() {
     total: 0,
     processed: 0
   });
+  const editionMappingAbortRef = useRef(false);
 
   const queryClient = useQueryClient();
 
@@ -159,7 +160,7 @@ export default function Cards() {
   };
 
   const handleMapEdition = async () => {
-    if (!editionIdentifier) {
+    if (!editionIdentifier || editionMappingStatus.running) {
       return;
     }
 
@@ -183,8 +184,13 @@ export default function Cards() {
       currentCardId: undefined,
       error: undefined
     });
+    editionMappingAbortRef.current = false;
 
     for (const [index, card] of cardsToProcess.entries()) {
+      if (editionMappingAbortRef.current) {
+        break;
+      }
+
       const edition = card.edition ?? card.edition_file ?? card.source_file ?? editionIdentifier;
 
       setEditionMappingStatus((prev) => ({
@@ -224,13 +230,30 @@ export default function Cards() {
 
       if (index < cardsToProcess.length - 1) {
         await delay(500);
+        if (editionMappingAbortRef.current) {
+          break;
+        }
       }
     }
 
+    const mappingWasAborted = editionMappingAbortRef.current;
     setEditionMappingStatus((prev) => ({
       ...prev,
       running: false,
-      currentCardId: undefined
+      currentCardId: undefined,
+      error: prev.error ?? (mappingWasAborted ? 'Edition-Mapping abgebrochen.' : undefined)
+    }));
+  };
+
+  const handleCancelEditionMapping = () => {
+    if (!editionMappingStatus.running) {
+      return;
+    }
+
+    editionMappingAbortRef.current = true;
+    setEditionMappingStatus((prev) => ({
+      ...prev,
+      error: 'Edition-Mapping abgebrochen.'
     }));
   };
 
@@ -307,6 +330,15 @@ export default function Cards() {
               ? 'Mapping…'
               : 'Apple zuweisen'}
         </button>
+        {editionMappingStatus.running && (
+          <button
+            type="button"
+            onClick={handleCancelEditionMapping}
+            className="px-4 py-2 bg-gray-200 text-gray-800 rounded-lg font-semibold shadow"
+          >
+            Mapping abbrechen
+          </button>
+        )}
       </td>
       <td className="px-6 py-4 whitespace-nowrap text-sm">
         <Link to={`/cards/${card.source_file ?? card.edition_file}/${card.id}`} className="text-blue-600 hover:text-blue-800 hover:underline">
