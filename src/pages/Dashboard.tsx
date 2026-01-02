@@ -10,7 +10,7 @@ export default function Dashboard() {
   if (isLoading) {
     return (
       <div className="flex items-center justify-center h-64">
-        <div className="text-gray-500">Lade Statistiken...</div>
+        <div className="text-slate-200">Lade Statistiken...</div>
       </div>
     );
   }
@@ -33,173 +33,106 @@ export default function Dashboard() {
     : 0;
 
   return (
-    <div className="px-4 sm:px-0">
-      <h2 className="text-2xl font-bold text-gray-900 mb-6">Dashboard</h2>
-
-      <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-4 mb-8">
-        <div className="bg-white overflow-hidden shadow rounded-lg">
-          <div className="p-5">
-            <div className="flex items-center">
-              <div className="flex-shrink-0">
-                <span className="text-3xl">🎵</span>
-              </div>
-              <div className="ml-5 w-0 flex-1">
-                <dl>
-                  <dt className="text-sm font-medium text-gray-500 truncate">Total Cards</dt>
-                  <dd className="text-2xl font-semibold text-gray-900">{summary.total_cards}</dd>
-                </dl>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <div className="bg-white overflow-hidden shadow rounded-lg">
-          <div className="p-5">
-            <div className="flex items-center">
-              <div className="flex-shrink-0">
-                <span className="text-3xl">📚</span>
-              </div>
-              <div className="ml-5 w-0 flex-1">
-                <dl>
-                  <dt className="text-sm font-medium text-gray-500 truncate">Editionen</dt>
-                  <dd className="text-2xl font-semibold text-gray-900">{summary.total_editions}</dd>
-                </dl>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <div className="bg-white overflow-hidden shadow rounded-lg">
-          <div className="p-5">
-            <div className="flex items-center">
-              <div className="flex-shrink-0">
-                <span className="text-3xl">🗂️</span>
-              </div>
-              <div className="ml-5 w-0 flex-1">
-                <dl>
-                  <dt className="text-sm font-medium text-gray-500 truncate">Files</dt>
-                  <dd className="text-2xl font-semibold text-gray-900">{summary.total_files}</dd>
-                </dl>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <div className="bg-white overflow-hidden shadow rounded-lg">
-          <div className="p-5">
-            <div className="flex items-center">
-              <div className="flex-shrink-0">
-                <span className="text-3xl">✅</span>
-              </div>
-              <div className="ml-5 w-0 flex-1">
-                <dl>
-                  <dt className="text-sm font-medium text-gray-500 truncate">Cards with Streaming</dt>
-                  <dd className="text-2xl font-semibold text-gray-900">
-                    {summary.cards_with_any_streaming}
-                  </dd>
-                </dl>
-              </div>
-            </div>
-          </div>
-        </div>
+    <div className="relative min-h-screen overflow-hidden bg-slate-950 text-slate-100">
+      <div className="pointer-events-none absolute inset-0 opacity-40" aria-hidden="true">
+        <div className="absolute -top-40 left-1/2 h-96 w-96 -translate-x-1/2 rounded-full bg-gradient-to-r from-indigo-500 via-purple-500 to-fuchsia-500 blur-[120px]" />
+        <div className="absolute bottom-[-10%] right-[-5%] h-80 w-80 rounded-full bg-gradient-to-tr from-emerald-500 to-cyan-500 blur-[100px]" />
       </div>
 
-      <div className="bg-white shadow rounded-lg p-6 mb-8">
-        <h3 className="text-lg font-medium text-gray-900 mb-4">Streaming Coverage</h3>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          <div>
-            <div className="flex items-center justify-between mb-2">
-              <span className="text-sm font-medium text-gray-700">Spotify IDs</span>
-              <span className="text-sm text-gray-500">
-                {summary.cards_with_spotify_id} Cards ({spotifyPercentage.toFixed(1)}%)
-              </span>
+      <div className="relative z-10 mx-auto max-w-6xl px-4 py-16 sm:px-6 lg:px-8">
+        <header className="mb-12 text-center lg:text-left">
+          <h1 className="mt-3 text-3xl font-semibold text-white sm:text-4xl">
+            Dashboard
+          </h1>
+          <p className="mt-2 text-base text-white/70">
+            Überblick über Inhalte, Streaming-Coverage und Editionen.
+          </p>
+        </header>
+
+        <div className="grid gap-6 lg:grid-cols-4 mb-10">
+          {[
+            {
+              label: 'Total Cards',
+              value: summary.total_cards,
+              accent: 'from-indigo-500 to-slate-900',
+              icon: '🎵'
+            },
+            {
+              label: 'Editionen',
+              value: summary.total_editions,
+              accent: 'from-emerald-500 to-cyan-900',
+              icon: '📚'
+            }
+          ].map((card) => (
+            <article
+              key={card.label}
+              className="rounded-3xl bg-gradient-to-br shadow-[0_20px_60px_rgba(15,23,42,0.5)] p-6 text-white"
+            >
+              <div className="text-4xl" aria-hidden>
+                {card.icon}
+              </div>
+              <p className="mt-3 text-sm uppercase tracking-[0.4em] text-white/50">{card.label}</p>
+              <p className="text-3xl font-semibold leading-tight">{card.value}</p>
+            </article>
+          ))}
+        </div>
+
+        <div className="rounded-[32px] bg-white/10 p-6 shadow-2xl shadow-black/40 backdrop-blur-lg mb-10">
+          <div className="flex flex-wrap items-center justify-between gap-4">
+            <div>
+              <p className="text-sm uppercase tracking-[0.3em] text-white/60">Streaming Coverage</p>
+              <h2 className="text-xl font-semibold text-white">Prozentualer Stand</h2>
             </div>
-            <div className="w-full bg-gray-200 rounded-full h-2.5">
-              <div
-                className="bg-green-600 h-2.5 rounded-full"
-                style={{ width: `${spotifyPercentage}%` }}
-              ></div>
-            </div>
+            <p className="text-sm text-white/60">
+              {summary.cards_with_spotify_id} Spotify · {summary.cards_with_apple_id} Apple · {summary.cards_with_both_streaming} Beide
+            </p>
           </div>
 
-          <div>
-            <div className="flex items-center justify-between mb-2">
-              <span className="text-sm font-medium text-gray-700">Apple IDs</span>
-              <span className="text-sm text-gray-500">
-                {summary.cards_with_apple_id} Cards ({applePercentage.toFixed(1)}%)
-              </span>
-            </div>
-            <div className="w-full bg-gray-200 rounded-full h-2.5">
-              <div
-                className="bg-red-600 h-2.5 rounded-full"
-                style={{ width: `${applePercentage}%` }}
-              ></div>
-            </div>
-          </div>
-
-          <div>
-            <div className="flex items-center justify-between mb-2">
-              <span className="text-sm font-medium text-gray-700">Both Services</span>
-              <span className="text-sm text-gray-500">
-                {summary.cards_with_both_streaming} Cards ({bothPercentage.toFixed(1)}%)
-              </span>
-            </div>
-            <div className="w-full bg-gray-200 rounded-full h-2.5">
-              <div
-                className="bg-blue-600 h-2.5 rounded-full"
-                style={{ width: `${bothPercentage}%` }}
-              ></div>
-            </div>
+          <div className="mt-6 grid gap-6 md:grid-cols-3">
+            {[
+              { title: 'Spotify IDs', percentage: spotifyPercentage, color: 'bg-emerald-400' },
+              { title: 'Apple IDs', percentage: applePercentage, color: 'bg-red-400' },
+              { title: 'Both Services', percentage: bothPercentage, color: 'bg-sky-400' }
+            ].map((metric) => (
+              <div key={metric.title}>
+                <div className="flex items-center justify-between text-sm text-white/70">
+                  <span>{metric.title}</span>
+                  <span>{metric.percentage.toFixed(1)}%</span>
+                </div>
+                <div className="mt-2 h-2 rounded-full bg-white/10">
+                  <div
+                    className={`${metric.color} h-2 rounded-full`}
+                    style={{ width: `${metric.percentage}%` }}
+                  ></div>
+                </div>
+              </div>
+            ))}
           </div>
         </div>
-      </div>
 
-      <div className="bg-white shadow rounded-lg p-6">
-        <h3 className="text-lg font-medium text-gray-900 mb-4">Editions</h3>
-        <div className="overflow-x-auto">
-          <table className="min-w-full divide-y divide-gray-200">
-            <thead className="bg-gray-50">
-              <tr>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Name
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Identifier
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Language
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  File
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Cards
-                </th>
-              </tr>
-            </thead>
-            <tbody className="bg-white divide-y divide-gray-200">
-              {editions.map((edition) => (
-                <tr key={edition.file}>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                    {edition.edition_name}
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                    {edition.identifier || '—'}
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                    {edition.language_long || edition.language_short || '—'}
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                    {edition.file}
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm font-semibold text-gray-900">
-                    {edition.cardCount}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+        <section className="rounded-[32px] bg-white/5 p-6 shadow-2xl shadow-black/40 backdrop-blur-lg">
+          <header className="mb-6 flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <h2 className="text-xl font-semibold text-white">Alle Editionen</h2>
+            </div>
+            <p className="text-sm text-white/60">{editions.length} Editionen geladen</p>
+          </header>
+
+          <div className="grid gap-4 md:grid-cols-2">
+            {editions.map((edition) => (
+              <article key={edition.edition_id} className="rounded-3xl border border-white/10 bg-white/5 p-5 shadow-lg shadow-black/30">
+                <div className="flex items-center justify-between">
+                  <h3 className="text-lg font-semibold text-white">{edition.edition_name}</h3>
+                </div>
+                <p className="mt-2 text-sm text-white/60">Identifier: {edition.identifier || '—'}</p>
+                <p className="text-sm text-white/60">{edition.cardCount} Karten</p>
+                <p className="text-sm text-white/60">
+                  Sprache: {edition.language_long || edition.language_short || '—'}
+                </p>
+              </article>
+            ))}
+          </div>
+        </section>
       </div>
     </div>
   );

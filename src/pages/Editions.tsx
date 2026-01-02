@@ -1,10 +1,11 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useMemo, useState } from 'react';
+import type { FormEvent } from 'react';
 import { editionsApi } from '../lib/api';
 
 interface SyncResult {
   message: string;
-  filename: string;
+  edition_id: string;
   edition: string;
   playlistId?: string;
   playlistUrl?: string;
@@ -27,20 +28,22 @@ interface SyncResult {
   }>;
 }
 
-  interface EditionForm {
-    edition: string;
-    edition_name: string;
-    identifier: string;
-    language_short: string;
-    language_long: string;
-  }
+interface EditionForm {
+  edition_id: string;
+  edition_name: string;
+  language_short: string;
+  language_long: string;
+  identifier: string;
+  spotify_playlist: string;
+}
 
 const initialFormData: EditionForm = {
-  edition: '',
+  edition_id: '',
   edition_name: '',
-  identifier: '',
   language_short: 'de',
   language_long: 'Deutsch',
+  identifier: '',
+  spotify_playlist: '',
 };
 
 export default function Editions() {
@@ -48,16 +51,19 @@ export default function Editions() {
   const [showSyncModal, setShowSyncModal] = useState(false);
   const [syncResult, setSyncResult] = useState<SyncResult | null>(null);
   const [selectedFile, setSelectedFile] = useState('');
-    const [formData, setFormData] = useState<EditionForm>(initialFormData);
+  const [formData, setFormData] = useState<EditionForm>(initialFormData);
 
   const queryClient = useQueryClient();
 
   const { data: editions = [], isLoading } = useQuery({
     queryKey: ['editions'],
-    queryFn: editionsApi.getAll,
+    queryFn: editionsApi.getAll
   });
 
   const editionCount = editions.length;
+  console.log('Editionen insgesamt:', editionCount);
+  console.log('Editionen Daten:', editions);
+  console.log('totalCards:', editions.reduce((acc, edition) => acc + (edition.cardCount || 0), 0));
   const totalCards = useMemo(
     () => editions.reduce((acc, edition) => acc + (edition.cardCount || 0), 0),
     [editions]
@@ -66,9 +72,7 @@ export default function Editions() {
     const langs = new Set<string>();
     editions.forEach((entry) => {
       const value = entry.language_long || entry.language_short;
-      if (value) {
-        langs.add(value);
-      }
+      if (value) langs.add(value);
     });
     return langs.size;
   }, [editions]);
@@ -76,52 +80,53 @@ export default function Editions() {
   const createEditionMutation = useMutation({
     mutationFn: (payload: EditionForm) =>
       editionsApi.create({
-        edition: payload.edition.trim(),
-        identifier: payload.identifier.trim(),
-        edition_name: payload.edition_name.trim() || undefined,
+        edition_id: payload.edition_id.trim(),
+        edition_name: payload.edition_name.trim(),
         language_short: payload.language_short.trim() || undefined,
         language_long: payload.language_long.trim() || undefined,
+        identifier: payload.identifier.trim(),
+        spotify_playlist: payload.spotify_playlist.trim() || undefined,
       }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['editions'] });
       setShowCreateModal(false);
       setFormData({ ...initialFormData });
-    },
+    }
   });
 
   const syncSpotifyMutation = useMutation({
-    mutationFn: (filename: string) => editionsApi.syncSpotifyPlaylist(filename),
+    mutationFn: (edition_id: string) => editionsApi.syncSpotifyPlaylist(edition_id),
     onSuccess: (data) => {
       setSyncResult(data.data as SyncResult);
       queryClient.invalidateQueries({ queryKey: ['cards'] });
       queryClient.invalidateQueries({ queryKey: ['editions'] });
-    },
+    }
   });
 
   const syncItunesMutation = useMutation({
-    mutationFn: (filename: string) => editionsApi.syncItunesMusic(filename),
+    mutationFn: (edition_id: string) => editionsApi.syncItunesMusic(edition_id),
     onSuccess: (data) => {
       setSyncResult(data.data as SyncResult);
       queryClient.invalidateQueries({ queryKey: ['cards'] });
       queryClient.invalidateQueries({ queryKey: ['editions'] });
-    },
+    }
   });
 
-  const handleSyncClick = (filename: string) => {
-    setSelectedFile(filename);
+  const handleSyncClick = (edition_id: string) => {
+    setSelectedFile(edition_id);
     setSyncResult(null);
     setShowSyncModal(true);
-    syncSpotifyMutation.mutate(filename);
+    syncSpotifyMutation.mutate(edition_id);
   };
 
-  const handleItunesSyncClick = (filename: string) => {
-    setSelectedFile(filename);
+  const handleItunesSyncClick = (edition_id: string) => {
+    setSelectedFile(edition_id);
     setSyncResult(null);
     setShowSyncModal(true);
-    syncItunesMutation.mutate(filename);
+    syncItunesMutation.mutate(edition_id);
   };
 
-  const handleSubmit = (event: React.FormEvent) => {
+  const handleSubmit = (event: FormEvent) => {
     event.preventDefault();
     createEditionMutation.mutate(formData);
   };
@@ -132,447 +137,339 @@ export default function Editions() {
 
   if (isLoading) {
     return (
-      <div className="flex items-center justify-center h-64">
-        <div className="text-gray-500">Lade Editionen...</div>
+      <div className="flex items-center justify-center min-h-[60vh]">
+        <span className="text-sm font-semibold text-white/70">Lade Editionen…</span>
       </div>
     );
   }
 
   return (
-    <div className="px-4 sm:px-0">
-      <div className="flex justify-between items-center mb-6">
-        <h2 className="text-2xl font-bold text-gray-900">Edition Overview</h2>
-        <button
-          onClick={() => setShowCreateModal(true)}
-          className="bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2 px-4 rounded-lg shadow"
-        >
-          + Neue Edition erstellen
-        </button>
+    <div className="relative min-h-screen overflow-hidden bg-slate-950 text-white">
+      <div className="pointer-events-none absolute inset-0 opacity-30" aria-hidden="true">
+        <div className="absolute -top-28 left-1/3 h-80 w-80 rounded-full bg-gradient-to-br from-indigo-500 via-purple-500 to-pink-500 blur-3xl" />
+        <div className="absolute bottom-[-10%] right-[-5%] h-96 w-96 rounded-full bg-gradient-to-br from-emerald-500 to-cyan-500 blur-3xl" />
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-5 mb-8">
-        <div className="bg-white overflow-hidden shadow rounded-lg">
-          <div className="p-5">
-            <div className="flex items-center">
-              <div className="flex-shrink-0">
-                <span className="text-3xl">📚</span>
-              </div>
-              <div className="ml-5 w-0 flex-1">
-                <dl>
-                  <dt className="text-sm font-medium text-gray-500 truncate">Edition Files</dt>
-                  <dd className="text-2xl font-semibold text-gray-900">{editionCount}</dd>
-                </dl>
-              </div>
+      <div className="relative z-10 mx-auto max-w-6xl px-4 py-10 sm:px-6 lg:px-8">
+        <header className="mb-12 text-center lg:text-left">
+          <p className="text-xs uppercase tracking-[0.45em] text-white/45">Edition Portfolio</p>
+
+          <div className="flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
+            <div>
+              <h1 className="mt-3 text-3xl font-semibold text-white sm:text-4xl">
+                Editionen verwalten
+              </h1>
+              <p className="mt-2 text-base text-white/70">
+                Überblick über alle Editionen, ihre Sprachen und Streaming-Stati.
+              </p>
+            </div>
+
+            <button
+              onClick={() => setShowCreateModal(true)}
+              className="inline-flex h-12 items-center justify-center gap-3 rounded-full
+                        bg-gradient-to-r from-indigo-500 to-fuchsia-500
+                        px-6 text-xs font-semibold uppercase tracking-[0.35em] text-white
+                        shadow-xl shadow-indigo-500/30 transition hover:opacity-95"
+            >
+              <span className="text-white/90">+</span>
+              Neue Edition
+            </button>
+          </div>
+
+          {/* KPI Row wie vorher – aber ohne Header-Rahmen */}
+          <div className="mt-8 grid gap-4 sm:grid-cols-3">
+            <div className="rounded-[28px] border border-white/10 bg-white/5 p-5 shadow-xl shadow-black/40">
+              <p className="text-[11px] uppercase tracking-[0.4em] text-white/60">Edition Files</p>
+              <p className="mt-2 text-3xl font-semibold text-white">{editionCount}</p>
+            </div>
+            <div className="rounded-[28px] border border-white/10 bg-white/5 p-5 shadow-xl shadow-black/40">
+              <p className="text-[11px] uppercase tracking-[0.4em] text-white/60">Cards</p>
+              <p className="mt-2 text-3xl font-semibold text-white">{totalCards}</p>
+            </div>
+            <div className="rounded-[28px] border border-white/10 bg-white/5 p-5 shadow-xl shadow-black/40">
+              <p className="text-[11px] uppercase tracking-[0.4em] text-white/60">Sprachen</p>
+              <p className="mt-2 text-3xl font-semibold text-white">{languageCount}</p>
             </div>
           </div>
-        </div>
+        </header>
 
-        <div className="bg-white overflow-hidden shadow rounded-lg">
-          <div className="p-5">
-            <div className="flex items-center">
-              <div className="flex-shrink-0">
-                <span className="text-3xl">🎵</span>
-              </div>
-              <div className="ml-5 w-0 flex-1">
-                <dl>
-                  <dt className="text-sm font-medium text-gray-500 truncate">Cards count</dt>
-                  <dd className="text-2xl font-semibold text-gray-900">{totalCards}</dd>
-                </dl>
-              </div>
+        <section className="mt-8 rounded-[32px] border border-white/10 bg-white/5 p-6 shadow-2xl shadow-black/50 backdrop-blur-xl">
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <p className="text-xs uppercase tracking-[0.4em] text-white/60">Editionen</p>
+              <h2 className="text-2xl font-semibold text-white">Alle Editionen</h2>
+            </div>
+            <p className="text-xs text-white/60">{editionCount} Dateien · {totalCards} Cards</p>
+          </div>
+
+          <div className="mt-6 flex flex-col gap-6">
+  {editions.map((edition) => {
+    const isSpecial = edition.edition_id === 'hitster-de-import.json';
+    const hasArtwork = Boolean(edition.image?.href && edition.image.exists);
+    const imageUrl = hasArtwork ? edition.image?.href : undefined;
+
+    const identifierLabel = edition.identifier ? `#${edition.identifier.toUpperCase()}` : `#${(edition.edition_id || '').slice(-8).toUpperCase() || 'UNKNOWN'}`;
+    const title = edition.edition_name || edition.edition_id || 'Unbenannte Edition';
+    const cardsLabel = `${edition.cardCount ?? 0} CARDS`;
+
+    return (
+      <article
+        key={edition.edition_id}
+        className="group rounded-[32px] border border-white/10 bg-gradient-to-br from-slate-900/70 via-slate-900/40 to-slate-900/70 p-5 shadow-2xl shadow-black/60 backdrop-blur-xl"
+      >
+        <div className="flex flex-col gap-5 md:flex-row md:items-center">
+          {/* LEFT: Cover */}
+          <div className="flex items-center justify-center">
+            <div className="relative h-28 w-28 overflow-hidden rounded-[26px] border border-white/10 bg-slate-900/70 shadow-xl shadow-black/50 md:h-32 md:w-32">
+              {hasArtwork ? (
+                <img
+                  src={imageUrl}
+                  alt={`${title} Cover`}
+                  className="h-full w-full object-cover"
+                  loading="lazy"
+                />
+              ) : (
+                <div className="flex h-full w-full items-center justify-center text-[10px] uppercase tracking-[0.35em] text-white/50">
+                  No Image
+                </div>
+              )}
             </div>
           </div>
-        </div>
 
-        <div className="bg-white overflow-hidden shadow rounded-lg">
-          <div className="p-5">
-            <div className="flex items-center">
-              <div className="flex-shrink-0">
-                <span className="text-3xl">🌐</span>
-              </div>
-              <div className="ml-5 w-0 flex-1">
-                <dl>
-                  <dt className="text-sm font-medium text-gray-500 truncate">Language</dt>
-                  <dd className="text-2xl font-semibold text-gray-900">{languageCount}</dd>
-                </dl>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
+          {/* RIGHT: Content */}
+          <div className="min-w-0 flex-1">
+            <div className="flex flex-col gap-2">
+              <p className="text-xs uppercase tracking-[0.35em] text-white/60">
+                {identifierLabel}
+              </p>
 
-      <div className="bg-white shadow rounded-lg overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="min-w-full divide-y divide-gray-200">
-            <thead className="bg-gray-50">
-              <tr>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Edition
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Identifier
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Sprache
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Datei
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Cards
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Aktionen
-                </th>
-              </tr>
-            </thead>
-            <tbody className="bg-white divide-y divide-gray-200">
-              {editions.map((edition) => (
-                <tr key={edition.file} className="hover:bg-gray-50">
-                  <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                    {edition.edition_name}
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                    {edition.identifier || '—'}
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                    {edition.language_long || edition.language_short || '—'}
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                    {edition.file}
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm font-semibold text-gray-900">
-                    {edition.cardCount}
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm">
-                    {edition.file !== 'hitster-de-import.json' ? (
-                      <div className="flex flex-wrap gap-2">
-                        <button
-                          onClick={() => handleSyncClick(edition.file)}
-                          disabled={syncSpotifyMutation.isPending || syncItunesMutation.isPending}
-                          className="text-green-600 hover:text-green-800 hover:underline inline-flex items-center disabled:opacity-50 disabled:cursor-not-allowed"
-                          title="Spotify Playlist Sync"
-                        >
-                          <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path
-                              strokeLinecap="round"
-                              strokeLinejoin="round"
-                              strokeWidth={2}
-                              d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
-                            />
-                          </svg>
-                          Spotify
-                        </button>
-                        <button
-                          onClick={() => handleItunesSyncClick(edition.file)}
-                          disabled={syncSpotifyMutation.isPending || syncItunesMutation.isPending}
-                          className="text-blue-600 hover:text-blue-800 hover:underline inline-flex items-center disabled:opacity-50 disabled:cursor-not-allowed"
-                          title="iTunes/Apple Music Sync"
-                        >
-                          <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path
-                              strokeLinecap="round"
-                              strokeLinejoin="round"
-                              strokeWidth={2}
-                              d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zM9 10l12-3"
-                            />
-                          </svg>
-                          iTunes
-                        </button>
-                      </div>
-                    ) : (
-                      <span className="text-gray-400 text-xs">-</span>
-                    )}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </div>
-
-      {showCreateModal && (
-        <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
-          <div className="relative top-20 mx-auto p-5 border w-96 shadow-lg rounded-md bg-white">
-            <div className="mt-3">
-              <h3 className="text-lg font-medium leading-6 text-gray-900 mb-4">
-                Neue Edition erstellen
+              <h3 className="truncate text-2xl font-semibold text-white md:text-3xl">
+                {title}
               </h3>
+
+              {/* Pills row like screenshot */}
+              <div className="mt-3 flex flex-wrap items-center gap-3">
+                <span className="rounded-full border border-white/10 bg-emerald-500/10 px-5 py-2 text-[11px] font-semibold uppercase tracking-[0.45em] text-emerald-100">
+                  {cardsLabel}
+                </span>
+
+                <button
+                  onClick={() => handleSyncClick(edition.edition_id)}
+                  disabled={isSpecial || syncSpotifyMutation.isPending || syncItunesMutation.isPending}
+                  className="inline-flex items-center gap-3 rounded-full bg-gradient-to-r from-emerald-500/60 to-lime-500/70 px-6 py-3 text-[11px] font-semibold uppercase tracking-[0.35em] text-white shadow-lg shadow-emerald-500/30 disabled:opacity-40"
+                >
+                  <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
+                    />
+                  </svg>
+                  Spotify
+                  {syncSpotifyMutation.isPending && selectedFile === edition.edition_id && (
+                    <span className="text-[10px] tracking-[0.25em] text-white/80">SYNC…</span>
+                  )}
+                </button>
+
+                <button
+                  onClick={() => handleItunesSyncClick(edition.edition_id)}
+                  disabled={isSpecial || syncSpotifyMutation.isPending || syncItunesMutation.isPending}
+                  className="inline-flex items-center gap-3 rounded-full bg-gradient-to-r from-sky-500/60 to-blue-500/70 px-6 py-3 text-[11px] font-semibold uppercase tracking-[0.35em] text-white shadow-lg shadow-sky-500/30 disabled:opacity-40"
+                >
+                  <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zM9 10l12-3"
+                    />
+                  </svg>
+                  iTunes
+                  {syncItunesMutation.isPending && selectedFile === edition.edition_id && (
+                    <span className="text-[10px] tracking-[0.25em] text-white/80">SYNC…</span>
+                  )}
+                </button>
+              </div>
+
+              {/* Optional: secondary meta row */}
+              <div className="mt-3 flex flex-wrap items-center gap-3 text-xs text-white/55">
+                <span className="rounded-full border border-white/10 bg-white/5 px-4 py-2">
+                  {edition.language_long || edition.language_short || 'Sprache unbekannt'}
+                </span>
+                <span className="rounded-full border border-white/10 bg-white/5 px-4 py-2">
+                  {edition.edition_id}
+                </span>
+                {edition.spotify_playlist ? (
+                  <span className="rounded-full border border-white/10 bg-white/5 px-4 py-2">
+                    Playlist: vorhanden
+                  </span>
+                ) : (
+                  <span className="rounded-full border border-white/10 bg-white/5 px-4 py-2">
+                    Playlist: n/a
+                  </span>
+                )}
+              </div>
+
+              {isSpecial && (
+                <p className="mt-3 text-[10px] uppercase tracking-[0.35em] text-white/40">
+                  Sync nicht verfügbar
+                </p>
+              )}
+            </div>
+          </div>
+        </div>
+      </article>
+    );
+  })}
+</div>
+        </section>
+
+        {showCreateModal && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60">
+            <div className="relative mx-4 max-w-md rounded-[32px] border border-white/10 bg-slate-950/90 p-6 shadow-2xl shadow-black/60">
+              <div className="mb-4">
+                <p className="text-xs uppercase tracking-[0.4em] text-white/60">Neue Edition</p>
+                <h3 className="text-2xl font-semibold text-white">Edition erstellen</h3>
+              </div>
               <form onSubmit={handleSubmit} className="space-y-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Edition Slug</label>
+                <label className="text-xs font-semibold uppercase tracking-[0.35em] text-white/60">
+                  Edition ID
                   <input
                     type="text"
                     required
-                    className="w-full border border-gray-300 rounded-md px-3 py-2"
-                    value={formData.edition}
-                    onChange={(e) => setFormData({ ...formData, edition: e.target.value })}
-                    placeholder="z.B. hitster-de-test"
+                    value={formData.edition_id}
+                    onChange={(e) => setFormData({ ...formData, edition_id: e.target.value })}
+                    className="mt-2 w-full rounded-2xl border border-white/10 bg-slate-900/70 px-3 py-2 text-sm text-white placeholder:text-white/40 focus:border-indigo-400 focus:outline-none"
+                    placeholder="hitster-de-test"
                   />
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Edition Name</label>
+                </label>
+                <label className="text-xs font-semibold uppercase tracking-[0.35em] text-white/60">
+                  Edition Name
                   <input
                     type="text"
-                    className="w-full border border-gray-300 rounded-md px-3 py-2"
                     value={formData.edition_name}
                     onChange={(e) => setFormData({ ...formData, edition_name: e.target.value })}
-                    placeholder="z.B. Hitster Deutschland Test"
+                    className="mt-2 w-full rounded-2xl border border-white/10 bg-slate-900/70 px-3 py-2 text-sm text-white placeholder:text-white/40 focus:border-indigo-400 focus:outline-none"
+                    placeholder="Hitster Deutschland Test"
                   />
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Identifier (8 Zeichen)</label>
+                </label>
+                <label className="text-xs font-semibold uppercase tracking-[0.35em] text-white/60">
+                  Identifier (8 Zeichen)
                   <input
                     type="text"
                     required
                     pattern="[a-z0-9]{8}"
                     maxLength={8}
-                    className="w-full border border-gray-300 rounded-md px-3 py-2"
                     value={formData.identifier}
-                    onChange={(e) =>
-                      setFormData({ ...formData, identifier: e.target.value.toLowerCase() })
-                    }
-                    placeholder="z.B. aaaa0099"
+                    onChange={(e) => setFormData({ ...formData, identifier: e.target.value.toLowerCase() })}
+                    className="mt-2 w-full rounded-2xl border border-white/10 bg-slate-900/70 px-3 py-2 text-sm text-white placeholder:text-white/40 focus:border-indigo-400 focus:outline-none"
+                    placeholder="aaaa0099"
                   />
-                  <p className="text-xs text-gray-500 mt-1">Nur Kleinbuchstaben und Zahlen</p>
-                </div>
-
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Sprache (kurz)</label>
+                  <p className="mt-1 text-[11px] text-white/50">Nur Kleinbuchstaben + Zahlen</p>
+                </label>
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <label className="text-xs font-semibold uppercase tracking-[0.35em] text-white/60">
+                    Sprache (kurz)
                     <input
                       type="text"
-                      className="w-full border border-gray-300 rounded-md px-3 py-2"
                       value={formData.language_short}
                       onChange={(e) => setFormData({ ...formData, language_short: e.target.value })}
+                      className="mt-2 w-full rounded-2xl border border-white/10 bg-slate-900/70 px-3 py-2 text-sm text-white placeholder:text-white/40 focus:border-indigo-400 focus:outline-none"
                     />
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Sprache (lang)</label>
+                  </label>
+                  <label className="text-xs font-semibold uppercase tracking-[0.35em] text-white/60">
+                    Sprache (lang)
                     <input
                       type="text"
-                      className="w-full border border-gray-300 rounded-md px-3 py-2"
                       value={formData.language_long}
                       onChange={(e) => setFormData({ ...formData, language_long: e.target.value })}
+                      className="mt-2 w-full rounded-2xl border border-white/10 bg-slate-900/70 px-3 py-2 text-sm text-white placeholder:text-white/40 focus:border-indigo-400 focus:outline-none"
                     />
-                  </div>
+                  </label>
                 </div>
-
+                <label className="text-xs font-semibold uppercase tracking-[0.35em] text-white/60">
+                  Spotify Playlist URL
+                  <input
+                    type="text"
+                    pattern="https?://open\.spotify\.com/playlist/.*"
+                    value={formData.spotify_playlist}
+                    onChange={(e) => setFormData({ ...formData, spotify_playlist: e.target.value })}
+                    className="mt-2 w-full rounded-2xl border border-white/10 bg-slate-900/70 px-3 py-2 text-sm text-white placeholder:text-white/40 focus:border-indigo-400 focus:outline-none"
+                    placeholder="https://open.spotify.com/playlist/your-playlist-id"
+                  />
+                </label>
                 {createErrorMessage && (
-                  <div className="text-red-600 text-sm">Fehler: {createErrorMessage}</div>
+                  <p className="rounded-2xl border border-rose-500/40 bg-rose-500/10 px-4 py-2 text-xs font-semibold uppercase tracking-[0.35em] text-rose-100">
+                    Fehler: {createErrorMessage}
+                  </p>
                 )}
-
-                <div className="flex justify-end gap-3 mt-5">
+                <div className="flex flex-wrap gap-3 pt-4">
                   <button
                     type="button"
                     onClick={() => setShowCreateModal(false)}
-                    className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50"
+                    className="flex-1 rounded-full border border-white/20 px-4 py-2 text-xs font-semibold uppercase tracking-[0.3em] text-white/80"
                   >
                     Abbrechen
                   </button>
                   <button
                     type="submit"
                     disabled={createEditionMutation.isPending}
-                    className="px-4 py-2 text-sm font-medium text-white bg-green-600 rounded-md hover:bg-green-700 disabled:opacity-50"
+                    className="flex-1 rounded-full bg-gradient-to-r from-emerald-500 to-lime-400 px-4 py-2 text-xs font-semibold uppercase tracking-[0.3em] text-white shadow-md shadow-emerald-500/40 disabled:opacity-50"
                   >
-                    {createEditionMutation.isPending ? 'Erstelle...' : 'Erstellen'}
+                    {createEditionMutation.isPending ? 'Erstelle…' : 'Erstellen'}
                   </button>
                 </div>
               </form>
             </div>
           </div>
-        </div>
-      )}
+        )}
 
-      {showSyncModal && (
-        <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
-          <div className="relative top-20 mx-auto p-5 border w-4/5 max-w-4xl shadow-lg rounded-md bg-white">
-            <div className="mt-3">
-              <div className="flex justify-between items-center mb-4">
-                <h3 className="text-lg font-medium leading-6 text-gray-900">
-                  {syncSpotifyMutation.isPending || syncSpotifyMutation.isSuccess ? 'Spotify' : 'iTunes'} Sync - {selectedFile}
+        {showSyncModal && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 px-4">
+            <div className="relative max-w-4xl rounded-[32px] border border-white/10 bg-slate-950/90 p-6 shadow-2xl shadow-black/70">
+              <div className="flex flex-col gap-2 border-b border-white/10 pb-4">
+                <p className="text-xs uppercase tracking-[0.4em] text-white/60">Sync Status</p>
+                <h3 className="text-2xl font-semibold text-white">
+                  {syncSpotifyMutation.isPending || syncSpotifyMutation.isSuccess ? 'Spotify Sync' : 'iTunes Sync'} · {selectedFile}
                 </h3>
-                <button
-                  onClick={() => setShowSyncModal(false)}
-                  className="text-gray-400 hover:text-gray-600"
-                >
-                  <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                  </svg>
-                </button>
+                <p className="text-sm text-white/60">{syncResult?.message || 'Sync läuft…'}</p>
               </div>
-
-              {(syncSpotifyMutation.isPending || syncItunesMutation.isPending) && (
-                <div className="flex flex-col items-center justify-center py-8">
-                  <svg className="animate-spin h-12 w-12 text-green-600 mb-4" fill="none" viewBox="0 0 24 24">
-                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                  </svg>
-                  <p className="text-gray-600">
-                    {syncSpotifyMutation.isPending ? 'Synchronisiere mit Spotify Playlist...' : 'Synchronisiere mit iTunes Search API...'}
-                  </p>
-                  <p className="text-sm text-gray-500 mt-2">
-                    {syncItunesMutation.isPending && 'Dies kann einige Minuten dauern (Rate Limiting)...'}
-                  </p>
-                </div>
-              )}
-
-              {(syncSpotifyMutation.isError || syncItunesMutation.isError) && (
-                <div className="bg-red-50 border border-red-200 rounded-md p-4">
-                  <div className="flex">
-                    <svg className="h-5 w-5 text-red-400" fill="currentColor" viewBox="0 0 20 20">
-                      <path
-                        fillRule="evenodd"
-                        d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z"
-                        clipRule="evenodd"
-                      />
-                    </svg>
-                    <div className="ml-3">
-                      <h3 className="text-sm font-medium text-red-800">Fehler beim Synchronisieren</h3>
-                      <p className="text-sm text-red-700 mt-1">
-                        {((syncSpotifyMutation.error || syncItunesMutation.error) as Error)?.message || 'Unbekannter Fehler'}
-                      </p>
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              {syncResult && (
-                <div className="space-y-4">
-                  <div className="bg-green-50 border border-green-200 rounded-md p-4">
-                    <div className="flex">
-                      <svg className="h-5 w-5 text-green-400" fill="currentColor" viewBox="0 0 20 20">
-                        <path
-                          fillRule="evenodd"
-                          d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z"
-                          clipRule="evenodd"
-                        />
-                      </svg>
-                      <div className="ml-3">
-                        <h3 className="text-sm font-medium text-green-800">Synchronisierung abgeschlossen</h3>
-                        <p className="text-sm text-green-700 mt-1">{syncResult.message}</p>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="bg-white border border-gray-200 rounded-md p-4">
-                    <h4 className="text-sm font-medium text-gray-900 mb-3">Details</h4>
-                    <dl className="grid grid-cols-2 gap-4">
+              <div className="mt-4 space-y-3 text-sm text-white/70">
+                {syncResult ? (
+                  <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
+                    <p className="text-xs uppercase tracking-[0.35em] text-white/50">Statistik</p>
+                    <dl className="mt-3 grid gap-2 text-white/80 md:grid-cols-3">
                       <div>
-                        <dt className="text-sm font-medium text-gray-500">Edition</dt>
-                        <dd className="mt-1 text-sm text-gray-900">{syncResult.edition}</dd>
+                        <dt className="text-[11px] uppercase tracking-[0.35em] text-white/50">Total Cards</dt>
+                        <dd className="text-lg font-semibold">{syncResult.statistics.totalCards}</dd>
                       </div>
-                      {syncResult.playlistId && (
-                        <div>
-                          <dt className="text-sm font-medium text-gray-500">Playlist ID</dt>
-                          <dd className="mt-1 text-sm text-gray-900">{syncResult.playlistId}</dd>
-                        </div>
-                      )}
-                      {syncResult.country && (
-                        <div>
-                          <dt className="text-sm font-medium text-gray-500">Country</dt>
-                          <dd className="mt-1 text-sm text-gray-900">{syncResult.country}</dd>
-                        </div>
-                      )}
-                      {syncResult.playlistUrl && (
-                        <div className="col-span-2">
-                          <dt className="text-sm font-medium text-gray-500">Playlist URL</dt>
-                          <dd className="mt-1 text-sm text-gray-900">
-                            <a
-                              href={syncResult.playlistUrl}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="text-green-600 hover:underline"
-                            >
-                              {syncResult.playlistUrl}
-                            </a>
-                          </dd>
-                        </div>
-                      )}
+                      <div>
+                        <dt className="text-[11px] uppercase tracking-[0.35em] text-white/50">Updated</dt>
+                        <dd className="text-lg font-semibold">{syncResult.statistics.updated}</dd>
+                      </div>
+                      <div>
+                        <dt className="text-[11px] uppercase tracking-[0.35em] text-white/50">Skipped</dt>
+                        <dd className="text-lg font-semibold">{syncResult.statistics.skipped}</dd>
+                      </div>
                     </dl>
                   </div>
-
-                  <div className="bg-white border border-gray-200 rounded-md p-4">
-                    <h4 className="text-sm font-medium text-gray-900 mb-3">Statistiken</h4>
-                    <div className="grid grid-cols-3 gap-4">
-                      <div className="bg-blue-50 rounded-md p-3">
-                        <div className="text-2xl font-bold text-blue-600">{syncResult.statistics.totalCards}</div>
-                        <div className="text-xs text-blue-600 mt-1">Gesamt Cards</div>
-                      </div>
-                      <div className="bg-green-50 rounded-md p-3">
-                        <div className="text-2xl font-bold text-green-600">{syncResult.statistics.updated}</div>
-                        <div className="text-xs text-green-600 mt-1">Aktualisiert</div>
-                      </div>
-                      <div className="bg-yellow-50 rounded-md p-3">
-                        <div className="text-2xl font-bold text-yellow-600">{syncResult.statistics.skipped}</div>
-                        <div className="text-xs text-yellow-600 mt-1">Übersprungen</div>
-                      </div>
-                      <div className="bg-red-50 rounded-md p-3">
-                        <div className="text-2xl font-bold text-red-600">{syncResult.statistics.notFound}</div>
-                        <div className="text-xs text-red-600 mt-1">Nicht gefunden</div>
-                      </div>
-                      {syncResult.statistics.playlistTracks && (
-                        <div className="bg-purple-50 rounded-md p-3">
-                          <div className="text-2xl font-bold text-purple-600">{syncResult.statistics.playlistTracks}</div>
-                          <div className="text-xs text-purple-600 mt-1">Playlist Tracks</div>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-
-                  {syncResult.updates && syncResult.updates.length > 0 && (
-                    <div className="bg-white border border-gray-200 rounded-md p-4">
-                      <h4 className="text-sm font-medium text-gray-900 mb-3">Aktualisierte Cards ({syncResult.updates.length})</h4>
-                      <div className="overflow-y-auto max-h-60">
-                        <table className="min-w-full divide-y divide-gray-200">
-                          <thead className="bg-gray-50">
-                            <tr>
-                              <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">Card ID</th>
-                              <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">Title</th>
-                              <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">Artist</th>
-                              <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">Spotify Track</th>
-                            </tr>
-                          </thead>
-                          <tbody className="bg-white divide-y divide-gray-200">
-                            {syncResult.updates.map((update, index) => (
-                              <tr key={index} className="hover:bg-gray-50">
-                                <td className="px-3 py-2 text-xs text-gray-900">{update.cardId}</td>
-                                <td className="px-3 py-2 text-xs text-gray-900">{update.title}</td>
-                                <td className="px-3 py-2 text-xs text-gray-500">{update.artist}</td>
-                                <td className="px-3 py-2 text-xs">
-                                  <a
-                                    href={`https://open.spotify.com/track/${update.spotifyTrack}`}
-                                    target="_blank"
-                                    rel="noopener noreferrer"
-                                    className="text-green-600 hover:underline"
-                                  >
-                                    {update.spotifyTrack}
-                                  </a>
-                                </td>
-                              </tr>
-                            ))}
-                          </tbody>
-                        </table>
-                      </div>
-                    </div>
-                  )}
-
-                  <div className="flex justify-end">
-                    <button
-                      onClick={() => setShowSyncModal(false)}
-                      className="px-4 py-2 text-sm font-medium text-white bg-green-600 rounded-md hover:bg-green-700"
-                    >
-                      Schließen
-                    </button>
-                  </div>
-                </div>
-              )}
+                ) : (
+                  <p className="text-xs uppercase tracking-[0.4em] text-white/60">Daten werden abgefragt…</p>
+                )}
+              </div>
+              <div className="mt-6 flex justify-end">
+                <button
+                  onClick={() => setShowSyncModal(false)}
+                  className="inline-flex items-center rounded-full border border-white/20 px-4 py-2 text-xs font-semibold uppercase tracking-[0.3em] text-white/80"
+                >
+                  Schließen
+                </button>
+              </div>
             </div>
           </div>
-        </div>
-      )}
+        )}
+      </div>
     </div>
   );
 }

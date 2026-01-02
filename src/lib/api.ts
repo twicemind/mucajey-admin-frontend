@@ -170,16 +170,14 @@ export interface Card {
     uri: string;
   };
   edition?: string;
+  edition_id?: string;
   language_short?: string;
   language_long?: string;
-  source_file?: string;
-  edition_file?: string;
   edition_name?: string;
-  genre?: string;
 }
 
 export interface CardCreatePayload {
-  edition_file: string;
+  edition_id: string;
   edition?: string;
   id: string;
   title: string;
@@ -212,7 +210,7 @@ export interface ItunesTrack {
 }
 
 export interface FailedSearch {
-  json_file: string;
+  edition: string;
   card_id: string;
   artist: string;
   title: string;
@@ -225,7 +223,6 @@ export interface FailedSearch {
 export interface StatsSummary {
   total_cards: number;
   total_editions: number;
-  total_files: number;
   cards_with_apple_id: number;
   cards_with_apple_uri: number;
   cards_with_spotify_id: number;
@@ -242,12 +239,12 @@ export interface StatsSummary {
 }
 
 export interface EditionStatsEntry {
-  edition: string;
+  edition_id: string;
   edition_name: string;
+  edition?: string;
   language_short: string;
   language_long: string;
   identifier: string;
-  file: string;
   cardCount: number;
 }
 
@@ -257,13 +254,22 @@ export interface DashboardStats {
 }
 
 export interface EditionEntry {
-  edition: string;
+  edition_id: string;
   edition_name: string;
   language_short: string;
   language_long: string;
   identifier: string;
-  file: string;
+  spotify_playlist: string;
   cardCount: number;
+  playlistId?: string;
+  playlistUrl?: string;
+  country?: string;
+  playlistTracks?: number;
+  image?: {
+    href: string;
+    exists: boolean;
+    filename?: string;
+  };
 }
 
 type ResultMessage<T extends Record<string, unknown>> = {
@@ -315,14 +321,32 @@ export const editionsApi = {
       .get<ResultMessage<{ editions: EditionEntry[] }>>('/edition/all')
       .then(res => res.data.editions ?? []),
 
+  get: (editionId: string) =>
+    mucajeyApi
+      .get<ResultMessage<{ edition: EditionEntry }>>(`/edition/${encodeSegment(editionId)}`)
+      .then(res => res.data.edition),
+
+  delete: (editionId: string) =>
+    mucajeyApi.delete(`/edition/${encodeSegment(editionId)}`),
+
+  update: (data: {
+    edition_id: string;
+    edition_name: string;
+    identifier: string;
+    language_short: string;
+    language_long: string;
+    spotify_playlist: string;
+  }) => mucajeyApi.post('/edition', data)
+      .then(res => res.data.edition),
+
   create: (data: {
-    edition: string;
+    edition_id: string;
+    edition_name: string;
     identifier: string;
     language_short?: string;
     language_long?: string;
-    edition_name?: string;
-    edition_file?: string;
-  }) => mucajeyApi.post('/edition', data),
+    spotify_playlist?: string;
+  }) => mucajeyApi.put('/edition', data),
 
   // Spotify & iTunes Sync über das mucajey Backend (Node.js Port 3000)
   syncSpotifyPlaylist: (filename: string) =>
